@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: streamvault-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-streamvault}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-please}
+      POSTGRES_DB: ${POSTGRES_DB:-streamvault}
+    volumes:
+      - streamvault-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-streamvault} -d ${POSTGRES_DB:-streamvault}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: streamvault-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-streamvault}:${POSTGRES_PASSWORD:-change-me-please}@db:5432/${POSTGRES_DB:-streamvault}
+      # Generate one with: openssl rand -base64 48
+      SESSION_SECRET: ${SESSION_SECRET:-change-me-to-a-long-random-string}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+
+volumes:
+  streamvault-pgdata:
