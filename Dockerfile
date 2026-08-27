@@ -14,7 +14,11 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
     DOCKER_BUILD=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/streamvault"
+ENV SESSION_SECRET="chave_temporaria_apenas_para_compilacao_12345"
+
 RUN npm run build
+
 
 ########## runtime ##########
 FROM node:22-alpine AS runner
