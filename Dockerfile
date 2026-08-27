@@ -14,6 +14,7 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
     DOCKER_BUILD=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+RUN mkdir -p public
 ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/streamvault"
 ENV SESSION_SECRET="chave_temporaria_apenas_para_compilacao_12345"
 
