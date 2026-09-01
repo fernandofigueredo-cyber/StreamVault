@@ -127,6 +127,24 @@ async function withNowPlaying(
   return rows.map((row) => mapRow(row, map.get(row.channel.id) ?? null));
 }
 
+/**
+ * Fetches channels + total + categories in the minimum number of DB round-trips.
+ * On high-latency databases (Render Free ~240ms/query) this is critical.
+ */
+export async function listCategoriesAndLibrary(
+  userId: number,
+  options: ListOptions & { withCategories: boolean },
+) {
+  // Run channels query and categories query truly in parallel (Promise.all)
+  const [libraryResult, categories] = await Promise.all([
+    listLibrary(userId, options),
+    options.withCategories
+      ? listCategories(userId, options.kind, options.playlistId)
+      : Promise.resolve([] as { id: number; name: string; itemCount: number }[]),
+  ]);
+  return { ...libraryResult, categories };
+}
+
 export async function listLibrary(userId: number, options: ListOptions) {
   const limit = Math.min(options.limit ?? 60, 200);
   const offset = options.offset ?? 0;
