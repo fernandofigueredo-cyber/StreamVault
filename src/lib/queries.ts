@@ -150,17 +150,6 @@ export async function listLibrary(userId: number, options: ListOptions) {
 export async function listCategories(userId: number, kind: string, playlistId?: number) {
   const filters = [eq(categories.userId, userId), eq(categories.kind, kind)];
   if (playlistId) filters.push(eq(categories.playlistId, playlistId));
-  const rows = await db
-    .select({
-      id: categories.id,
-      name: categories.name,
-      itemCount: sql<number>`(select count(*) from channels c where c.category_id = ${categories.id})`,
-    })
-    .from(categories)
-    .where(and(...filters))
-    .orderBy(asc(categories.sortOrder), asc(categories.name));
-  return rows.map((row) => ({ ...row, itemCount: Number(row.itemCount) }));
-}
 
 export async function listPlaylists(userId: number): Promise<Playlist[]> {
   return db.select().from(playlists).where(eq(playlists.userId, userId)).orderBy(desc(playlists.createdAt));
