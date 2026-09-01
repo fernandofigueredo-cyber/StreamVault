@@ -151,6 +151,33 @@ export async function listCategories(userId: number, kind: string, playlistId?: 
   const filters = [eq(categories.userId, userId), eq(categories.kind, kind)];
   if (playlistId) filters.push(eq(categories.playlistId, playlistId));
 
+  const cats = await db
+    .select({ id: categories.id, name: categories.name, sortOrder: categories.sortOrder })
+    .from(categories)
+    .where(and(...filters))
+    .orderBy(asc(categories.sortOrder), asc(categories.name));
+
+  if (cats.length === 0) return [];
+
+  const catIds = cats.map((c) => c.id);
+  const countRows = await db
+    .select({
+      categoryId: channels.categoryId,
+      cnt: sql<number>`count(*)`,
+    })
+    .from(channels)
+    .where(
+      and(
+        eq(channels.userId, userId),
+        inArray(channels.categoryId, catIds),
+      ),
+    )
+    .groupBy(channels.categoryId);
+
+  const countMap = new Map(countRows.map((r) => [r.categoryId, Number(r.cnt)]));
+  return cats.map((c) => ({ id: c.id, name: c.name, itemCount: countMap.get(c.id) ?? 0 }));
+}
+
 export async function listPlaylists(userId: number): Promise<Playlist[]> {
   return db.select().from(playlists).where(eq(playlists.userId, userId)).orderBy(desc(playlists.createdAt));
 }
