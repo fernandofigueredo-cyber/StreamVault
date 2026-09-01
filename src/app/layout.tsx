@@ -1,25 +1,41 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import KeepAlive from "@/components/KeepAlive";
+import PwaInit from "@/components/PwaInit";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "StreamVault — IPTV Player for M3U & Xtream Codes",
+  title: "StreamVault — IPTV Player",
   description:
-    "Import your own M3U/M3U8 playlists or sign in with Xtream Codes to watch live TV, movies and series with EPG, favourites and a polished responsive player.",
+    "O seu player IPTV pessoal — listas M3U e Xtream Codes, TV ao vivo, filmes e séries.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "StreamVault",
+  },
+  icons: {
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
+  },
 };
 
 export const viewport: Viewport = {
   themeColor: "#05060c",
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="pt-BR">
       <body className="min-h-dvh bg-ink-950 font-sans text-slate-100 antialiased">
         <KeepAlive />
+        <PwaInit />
         {children}
       </body>
     </html>
