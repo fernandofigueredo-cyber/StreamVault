@@ -73,6 +73,10 @@ export function SkeletonGrid({ count = 12 }: { count?: number }) {
   );
 }
 
+/**
+ * Full-size gradient poster — shown whenever a logo is absent OR fails to load.
+ * Lives-up to a full aspect-square so the card is always the right size.
+ */
 export function PosterTile({
   item,
   label,
@@ -101,6 +105,12 @@ export function PosterTile({
   );
 }
 
+/**
+ * Logo image with automatic fallback to PosterTile on any load error.
+ * This is the critical fix: IPTV providers frequently serve logos from CDNs
+ * that return 403 or have CORS issues — the img silently stays broken without
+ * an onError handler, leaving an empty space and tiny initials.
+ */
 export function LogoOrPoster({
   item,
   className,
@@ -193,6 +203,11 @@ export function FavoriteButton({
   );
 }
 
+/**
+ * MediaCard — two layouts depending on kind:
+ *  • Live TV   → square poster + big initials + full gradient (like the good screenshot)
+ *  • Movie/VOD → 16:9 thumbnail with title below
+ */
 export function MediaCard({
   item,
   href,
@@ -223,12 +238,14 @@ export function MediaCard({
         href={href}
         className="block overflow-hidden rounded-2xl border border-white/8 bg-black/20 transition hover:-translate-y-0.5 hover:border-brand-400/40 hover:shadow-xl hover:shadow-brand-500/15"
       >
+        {/* ── Thumbnail area ───────────────────────────────────────────── */}
         <div className={cn("relative w-full overflow-hidden", isLive ? "aspect-square" : "aspect-video")}>
-          <LogoOrPoster
-            item={item}
-            className="transition duration-300 group-hover:scale-[1.04] group-hover:brightness-110"
-          />
+          <LogoOrPoster item={item} className="transition duration-300 group-hover:scale-[1.04] group-hover:brightness-110" />
+
+          {/* dark overlay so text is readable over bright gradients */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+
+          {/* Live / kind badge */}
           <span
             className={cn(
               "absolute left-2.5 top-2.5 rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider shadow-lg backdrop-blur-sm",
@@ -239,28 +256,37 @@ export function MediaCard({
           >
             {badge ?? (isLive ? "● AO VIVO" : item.kind === "series" ? "SÉRIE" : item.kind === "episode" ? "EPISÓDIO" : "FILME")}
           </span>
+
+          {/* Rating */}
           {item.rating && !isLive ? (
             <span className="absolute right-2.5 top-2.5 flex items-center gap-1 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300 backdrop-blur">
               <Star className="h-3 w-3 fill-current" />
               {item.rating}
             </span>
           ) : null}
+
+          {/* Play overlay on hover */}
           <span className="absolute inset-0 grid place-items-center opacity-0 transition group-hover:opacity-100">
             <span className="grid h-14 w-14 place-items-center rounded-full bg-brand-500/90 shadow-2xl shadow-black/60 transition group-hover:scale-105">
               <Play className="h-6 w-6 fill-white text-white" />
             </span>
           </span>
+
+          {/* Progress bar */}
           {progressPercent ? (
             <div className="absolute inset-x-0 bottom-0 h-1.5 bg-white/15">
               <div className="h-full bg-accent-400 transition-all" style={{ width: `${progressPercent}%` }} />
             </div>
           ) : null}
         </div>
+
+        {/* ── Info below ───────────────────────────────────────────────── */}
         <div className="p-3">
           <h3 className="truncate text-sm font-semibold leading-snug text-white">{item.name}</h3>
           <p className="mt-0.5 truncate text-xs text-slate-400">
             {subtitle ?? item.nowPlaying?.title ?? item.genre ?? item.groupTitle ?? "—"}
           </p>
+
           {item.nowPlaying ? (
             <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-accent-400">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-400" />
@@ -275,6 +301,7 @@ export function MediaCard({
           ) : null}
         </div>
       </Link>
+
       {onToggleFavorite ? (
         <FavoriteButton
           item={{ id: item.id, isFavorite: item.isFavorite }}
