@@ -1,5 +1,5 @@
 import { getCurrentUser, unauthorized } from "@/lib/auth";
-import { listCategories, listLibrary } from "@/lib/queries";
+import { listCategoriesAndLibrary } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -8,16 +8,17 @@ export async function GET(request: Request) {
   if (!user) return unauthorized();
 
   const { searchParams } = new URL(request.url);
-  const kind = searchParams.get("kind") ?? "live";
+  const kind       = searchParams.get("kind") ?? "live";
   const playlistId = searchParams.get("playlistId");
-  const category = searchParams.get("category");
-  const q = searchParams.get("q") ?? undefined;
-  const favoriteOnly = searchParams.get("favorites") === "1";
-  const limit = Number(searchParams.get("limit") ?? 60);
-  const offset = Number(searchParams.get("offset") ?? 0);
+  const category   = searchParams.get("category");
+  const q          = searchParams.get("q") ?? undefined;
+  const favoriteOnly   = searchParams.get("favorites") === "1";
+  const limit      = Number(searchParams.get("limit") ?? 60);
+  const offset     = Number(searchParams.get("offset") ?? 0);
   const withCategories = searchParams.get("withCategories") === "1";
 
-  const result = await listLibrary(user.id, {
+  // Single combined call — avoids 3 separate round-trips to the database
+  const result = await listCategoriesAndLibrary(user.id, {
     kind,
     playlistId: playlistId ? Number(playlistId) : undefined,
     category: category && category !== "all" ? category : undefined,
@@ -26,9 +27,12 @@ export async function GET(request: Request) {
     limit: Number.isFinite(limit) ? limit : 60,
     offset: Number.isFinite(offset) ? offset : 0,
     sort: (searchParams.get("sort") as "default" | "name" | "recent" | null) ?? "default",
+    withCategories,
   });
 
-  const cats = withCategories ? await listCategories(user.id, kind, playlistId ? Number(playlistId) : undefined) : undefined;
-
-  return Response.json({ items: result.items, total: result.total, categories: cats ?? [] });
+  return Response.json({
+    items: result.items,
+    total: result.total,
+    categories: result.categories,
+  });
 }
