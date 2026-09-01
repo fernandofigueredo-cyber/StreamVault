@@ -28,6 +28,10 @@ alter table playlists add column if not exists progress_done integer not null de
 alter table playlists add column if not exists progress_total integer;
 alter table channels add column if not exists category_id integer;
 create index if not exists channels_group_idx on channels(playlist_id, kind, group_title);
+create index if not exists channels_user_kind_group_idx on channels(user_id, kind, group_title);
+create index if not exists epg_item_time_idx on epg_programs(item_id, starts_at, ends_at);
+create index if not exists favorites_user_idx on favorites(user_id);
+create index if not exists watch_history_user_idx on watch_history(user_id);
 `;
 
 const SCHEMA_SQL = `
