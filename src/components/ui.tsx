@@ -61,9 +61,9 @@ export function SkeletonGrid({ count = 12 }: { count?: number }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
       {Array.from({ length: count }).map((_, index) => (
-        <div key={index} className="card overflow-hidden rounded-2xl">
-          <div className="skeleton aspect-video w-full" />
-          <div className="space-y-2 p-3">
+        <div key={index} className="overflow-hidden rounded-2xl border border-white/6">
+          <div className="skeleton aspect-square w-full" />
+          <div className="space-y-2 bg-black/20 p-3">
             <div className="skeleton h-3.5 w-3/4 rounded" />
             <div className="skeleton h-3 w-1/2 rounded" />
           </div>
@@ -75,29 +75,54 @@ export function SkeletonGrid({ count = 12 }: { count?: number }) {
 
 export function PosterTile({
   item,
-  className,
   label,
+  className,
 }: {
   item: Pick<LibraryItem, "name" | "kind">;
-  className?: string;
   label?: string;
+  className?: string;
 }) {
   const gradient = gradientFor(item.name);
   return (
     <div
       className={cn(
-        "grid h-full w-full place-items-center bg-gradient-to-br text-white/90",
+        "flex h-full w-full flex-col items-center justify-center bg-gradient-to-br p-4 text-white",
         gradient,
         className,
       )}
     >
-      <div className="px-3 text-center">
-        <span className="block text-2xl font-black tracking-tight drop-shadow-lg sm:text-3xl">
-          {initialsOf(item.name)}
-        </span>
-        {label ? <span className="mt-1 block text-[10px] font-semibold uppercase tracking-widest text-white/70">{label}</span> : null}
-      </div>
+      <span className="text-center text-3xl font-black tracking-tight drop-shadow-xl sm:text-4xl lg:text-5xl">
+        {initialsOf(item.name)}
+      </span>
+      <span className="mt-2 text-center text-[10px] font-bold uppercase tracking-widest text-white/60 drop-shadow">
+        {label ?? item.kind}
+      </span>
     </div>
+  );
+}
+
+export function LogoOrPoster({
+  item,
+  className,
+}: {
+  item: Pick<LibraryItem, "name" | "kind" | "logo">;
+  className?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (!item.logo || failed) {
+    return <PosterTile item={item} className={className} />;
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={item.logo}
+      alt={item.name}
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className={cn("h-full w-full object-cover", className)}
+    />
   );
 }
 
@@ -118,7 +143,9 @@ export function useFavorites() {
       const data = (await response.json()) as { isFavorite: boolean };
       apply(data.isFavorite);
       const cached = JSON.parse(window.localStorage.getItem("streamvault.favorites") ?? "[]") as number[];
-      const updated = data.isFavorite ? Array.from(new Set([...cached, item.id])) : cached.filter((id) => id !== item.id);
+      const updated = data.isFavorite
+        ? Array.from(new Set([...cached, item.id]))
+        : cached.filter((id) => id !== item.id);
       window.localStorage.setItem("streamvault.favorites", JSON.stringify(updated));
     } catch {
       apply(!next);
@@ -153,10 +180,10 @@ export function FavoriteButton({
         event.stopPropagation();
         onToggle(item);
       }}
-      aria-label={item.isFavorite ? "Remove from favourites" : "Add to favourites"}
+      aria-label={item.isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
       className={cn(
         "grid h-9 w-9 place-items-center rounded-full border border-white/15 bg-black/50 backdrop-blur transition hover:scale-105",
-        item.isFavorite ? "text-rose-400" : "text-white/70",
+        item.isFavorite ? "text-rose-400" : "text-white/70 hover:text-rose-300",
         pending && "opacity-60",
         className,
       )}
@@ -184,6 +211,7 @@ export function MediaCard({
   subtitle?: string;
 }) {
   const isLive = item.kind === "live";
+
   const progressPercent = useMemo(() => {
     if (!progress || !item.durationSecs) return null;
     return Math.min(100, Math.round((progress / item.durationSecs) * 100));
@@ -193,73 +221,66 @@ export function MediaCard({
     <div className="group relative">
       <Link
         href={href}
-        className="card block overflow-hidden rounded-2xl transition hover:-translate-y-0.5 hover:border-brand-400/40 hover:shadow-xl hover:shadow-brand-500/10"
+        className="block overflow-hidden rounded-2xl border border-white/8 bg-black/20 transition hover:-translate-y-0.5 hover:border-brand-400/40 hover:shadow-xl hover:shadow-brand-500/15"
       >
-        <div className="relative aspect-video overflow-hidden bg-ink-800">
-          {item.logo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={item.logo}
-              alt={item.name}
-              loading="lazy"
-              className="h-full w-full object-cover opacity-90 transition group-hover:scale-[1.03] group-hover:opacity-100"
-            />
-          ) : (
-            <PosterTile item={item} label={isLive ? "live" : item.kind} />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-
+        <div className={cn("relative w-full overflow-hidden", isLive ? "aspect-square" : "aspect-video")}>
+          <LogoOrPoster
+            item={item}
+            className="transition duration-300 group-hover:scale-[1.04] group-hover:brightness-110"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
           <span
             className={cn(
-              "absolute left-2 top-2 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide backdrop-blur",
-              isLive ? "bg-rose-500/90 text-white" : "bg-black/60 text-slate-200",
+              "absolute left-2.5 top-2.5 rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider shadow-lg backdrop-blur-sm",
+              isLive
+                ? "animate-pulse bg-rose-500 text-white shadow-rose-800/40"
+                : "bg-black/60 text-slate-200",
             )}
           >
-            {badge ?? (isLive ? "live" : item.kind)}
+            {badge ?? (isLive ? "● AO VIVO" : item.kind === "series" ? "SÉRIE" : item.kind === "episode" ? "EPISÓDIO" : "FILME")}
           </span>
-
-          {item.rating ? (
-            <span className="absolute right-2 top-2 flex items-center gap-1 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300 backdrop-blur">
+          {item.rating && !isLive ? (
+            <span className="absolute right-2.5 top-2.5 flex items-center gap-1 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300 backdrop-blur">
               <Star className="h-3 w-3 fill-current" />
               {item.rating}
             </span>
           ) : null}
-
           <span className="absolute inset-0 grid place-items-center opacity-0 transition group-hover:opacity-100">
-            <span className="grid h-12 w-12 place-items-center rounded-full bg-brand-500/90 shadow-xl shadow-black/40">
-              <Play className="h-5 w-5 fill-white text-white" />
+            <span className="grid h-14 w-14 place-items-center rounded-full bg-brand-500/90 shadow-2xl shadow-black/60 transition group-hover:scale-105">
+              <Play className="h-6 w-6 fill-white text-white" />
             </span>
           </span>
-
           {progressPercent ? (
-            <div className="absolute inset-x-0 bottom-0 h-1 bg-white/15">
-              <div className="h-full bg-accent-400" style={{ width: `${progressPercent}%` }} />
+            <div className="absolute inset-x-0 bottom-0 h-1.5 bg-white/15">
+              <div className="h-full bg-accent-400 transition-all" style={{ width: `${progressPercent}%` }} />
             </div>
           ) : null}
         </div>
-
         <div className="p-3">
-          <h3 className="truncate text-sm font-semibold text-white">{item.name}</h3>
+          <h3 className="truncate text-sm font-semibold leading-snug text-white">{item.name}</h3>
           <p className="mt-0.5 truncate text-xs text-slate-400">
             {subtitle ?? item.nowPlaying?.title ?? item.genre ?? item.groupTitle ?? "—"}
           </p>
           {item.nowPlaying ? (
             <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-accent-400">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-400" />
-              until {new Date(item.nowPlaying.endsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              até{" "}
+              {new Date(item.nowPlaying.endsAt).toLocaleTimeString("pt-BR", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </p>
           ) : item.durationSecs ? (
             <p className="mt-1.5 text-[11px] text-slate-500">{formatDuration(item.durationSecs)}</p>
           ) : null}
         </div>
       </Link>
-
       {onToggleFavorite ? (
         <FavoriteButton
           item={{ id: item.id, isFavorite: item.isFavorite }}
           onToggle={onToggleFavorite}
           pending={favoritePending}
-          className="absolute right-2 top-2 opacity-0 transition group-hover:opacity-100 focus:opacity-100 sm:opacity-0"
+          className="absolute right-2 top-2 opacity-0 transition group-hover:opacity-100 focus:opacity-100"
         />
       ) : null}
     </div>
