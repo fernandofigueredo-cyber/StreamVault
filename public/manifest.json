@@ -1,0 +1,35 @@
+{
+  "name": "StreamVault",
+  "short_name": "StreamVault",
+  "description": "O seu player IPTV pessoal — listas M3U e Xtream Codes",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#05060c",
+  "theme_color": "#05060c",
+  "lang": "pt-BR",
+  "scope": "/",
+  "categories": ["entertainment", "video"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    { "name": "TV ao Vivo", "url": "/live", "description": "Abrir canais ao vivo" },
+    { "name": "Filmes", "url": "/movies", "description": "Abrir biblioteca de filmes" },
+    { "name": "Séries", "url": "/series", "description": "Abrir biblioteca de séries" },
+    { "name": "Favoritos", "url": "/favorites", "description": "Abrir favoritos" }
+  ]
+}
