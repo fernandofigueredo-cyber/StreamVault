@@ -148,34 +148,28 @@ export async function listLibrary(userId: number, options: ListOptions) {
 }
 
 export async function listCategories(userId: number, kind: string, playlistId?: number) {
-  const filters = [eq(categories.userId, userId), eq(categories.kind, kind)];
-  if (playlistId) filters.push(eq(categories.playlistId, playlistId));
+  // Read categories directly from group_title on channels.
+  // This works on every database regardless of whether category_id is populated,
+  // so it never returns an empty list when channels exist.
+  const filters = [eq(channels.userId, userId), sql`${channels.groupTitle} is not null`];
+  if (kind && kind !== "all") filters.push(eq(channels.kind, kind));
+  if (playlistId) filters.push(eq(channels.playlistId, playlistId));
 
-  const cats = await db
-    .select({ id: categories.id, name: categories.name, sortOrder: categories.sortOrder })
-    .from(categories)
-    .where(and(...filters))
-    .orderBy(asc(categories.sortOrder), asc(categories.name));
-
-  if (cats.length === 0) return [];
-
-  const catIds = cats.map((c) => c.id);
-  const countRows = await db
+  const rows = await db
     .select({
-      categoryId: channels.categoryId,
+      name: channels.groupTitle,
       cnt: sql<number>`count(*)`,
     })
     .from(channels)
-    .where(
-      and(
-        eq(channels.userId, userId),
-        inArray(channels.categoryId, catIds),
-      ),
-    )
-    .groupBy(channels.categoryId);
+    .where(and(...filters))
+    .groupBy(channels.groupTitle)
+    .orderBy(asc(channels.groupTitle));
 
-  const countMap = new Map(countRows.map((r) => [r.categoryId, Number(r.cnt)]));
-  return cats.map((c) => ({ id: c.id, name: c.name, itemCount: countMap.get(c.id) ?? 0 }));
+  return rows.map((row, index) => ({
+    id: index + 1,
+    name: row.name as string,
+    itemCount: Number(row.cnt),
+  }));
 }
 
 export async function listPlaylists(userId: number): Promise<Playlist[]> {
