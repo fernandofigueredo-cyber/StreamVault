@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import KeepAlive from "@/components/KeepAlive";
 import PwaInit from "@/components/PwaInit";
+import ColdStartLoader from "@/components/ColdStartLoader";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="pt-BR">
       <body className="min-h-dvh bg-ink-950 font-sans text-slate-100 antialiased">
+        <ColdStartLoader />
         <KeepAlive />
         <PwaInit />
         {children}
