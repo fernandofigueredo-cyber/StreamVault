@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+mport { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { hashPassword } from "@/lib/auth";
 import {
@@ -22,6 +22,13 @@ export const DEMO_EMAIL = "demo@streamvault.app";
 export const DEMO_PASSWORD = "demo1234";
 
 let bootstrapPromise: Promise<void> | null = null;
+
+const MIGRATE_SQL = `
+alter table playlists add column if not exists progress_done integer not null default 0;
+alter table playlists add column if not exists progress_total integer;
+alter table channels add column if not exists category_id integer;
+create index if not exists channels_group_idx on channels(playlist_id, kind, group_title);
+`;
 
 const SCHEMA_SQL = `
 create table if not exists users (
@@ -127,6 +134,8 @@ create index if not exists epg_item_idx on epg_programs(item_id, starts_at);
 
 async function ensureSchema() {
   await db.execute(sql.raw(SCHEMA_SQL));
+  // Safe migrations: add columns that may be missing on existing databases
+  await db.execute(sql.raw(MIGRATE_SQL));
 }
 
 export function ensureBootstrapped(): Promise<void> {
