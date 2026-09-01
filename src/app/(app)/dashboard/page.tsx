@@ -18,17 +18,21 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const [stats, history, favorites, liveNow, series, movies, playlists] = await Promise.all([
+  // Run critical-path queries first, defer rails to avoid blocking initial render
+  const [stats, playlists] = await Promise.all([
     getLibraryStats(user.id),
-    listHistory(user.id, 14),
-    listFavorites(user.id, 14),
-    getLiveNow(user.id, 14),
-    listLibrary(user.id, { kind: "series", limit: 14 }),
-    listLibrary(user.id, { kind: "movie", limit: 14 }),
     listPlaylists(user.id),
   ]);
-
   const hasContent = stats.total > 0;
+  const [history, favorites, liveNow, series, movies] = hasContent
+    ? await Promise.all([
+        listHistory(user.id, 10),
+        listFavorites(user.id, 10),
+        getLiveNow(user.id, 10),
+        listLibrary(user.id, { kind: "series", limit: 10 }),
+        listLibrary(user.id, { kind: "movie", limit: 10 }),
+      ])
+    : [[], [], [], { items: [] }, { items: [] }];
 
   return (
     <div className="space-y-8">
