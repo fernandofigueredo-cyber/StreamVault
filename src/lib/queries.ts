@@ -110,11 +110,20 @@ function baseQuery(userId: number) {
     .leftJoin(watchHistory, and(eq(watchHistory.itemId, channels.id), eq(watchHistory.userId, userId)));
 }
 
-async function withNowPlaying(userId: number, rows: Parameters<typeof mapRow>[0][]) {
-  const map = await nowPlayingMap(
-    userId,
-    rows.map((row) => row.channel.id),
-  );
+async function withNowPlaying(
+  userId: number,
+  rows: Parameters<typeof mapRow>[0][],
+  skipEpg = false,
+) {
+  if (skipEpg || rows.length === 0) {
+    return rows.map((row) => mapRow(row, null));
+  }
+  // Only fetch EPG for live channels — VOD never has "now playing"
+  const liveRows = rows.filter((r) => r.channel.kind === "live");
+  const map =
+    liveRows.length > 0
+      ? await nowPlayingMap(userId, liveRows.map((r) => r.channel.id))
+      : new Map<number, { title: string; description: string | null; endsAt: Date }>();
   return rows.map((row) => mapRow(row, map.get(row.channel.id) ?? null));
 }
 
@@ -144,7 +153,7 @@ export async function listLibrary(userId: number, options: ListOptions) {
     .leftJoin(favorites, and(eq(favorites.itemId, channels.id), eq(favorites.userId, userId)))
     .where(and(...filters));
 
-  return { items: await withNowPlaying(userId, rows), total: Number(totalRow?.value ?? 0) };
+  return { items: await withNowPlaying(userId, rows, options.kind !== "live"), total: Number(totalRow?.value ?? 0) };
 }
 
 export async function listCategories(userId: number, kind: string, playlistId?: number) {
