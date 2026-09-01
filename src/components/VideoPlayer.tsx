@@ -89,16 +89,50 @@ export default function VideoPlayer({ source }: { source: PlayerSource }) {
           video.src = source.url;
           return;
         }
+        const isLiveStream = source.isLive;
         const hls = new Hls({
-          lowLatencyMode: false,
+          // ── Core ──────────────────────────────────────────────────────
           enableWorker: true,
-          maxBufferLength: 30,
-          manifestLoadingTimeOut: 15000,
-          manifestLoadingMaxRetry: 2,
+          lowLatencyMode: false,
+
+          // ── Buffer — live TV needs a bigger runway to avoid stalls ───
+          maxBufferLength:           isLiveStream ? 60  : 30,
+          maxMaxBufferLength:        isLiveStream ? 120 : 60,
+          maxBufferSize:             60 * 1000 * 1000,   // 60 MB
+          backBufferLength:          isLiveStream ? 0   : 30, // don't keep back-buffer for live
+          maxBufferHole:             0.5,  // tolerance for gaps in segments
+
+          // ── Live sync — prevent drifting behind the live edge ────────
+          liveSyncDurationCount:     3,    // stay 3 segments behind live edge
+          liveMaxLatencyDurationCount: 10, // max drift before re-sync
+          liveDurationInfinity:      true, // treat live as infinite duration
+
+          // ── Stall recovery — key fix for the repeating content bug ───
+          // When a stall is detected, nudge forward instead of seeking to 0
+          nudgeMaxRetry:             10,
+          nudgeOffset:               0.2,  // seconds to nudge on each stall
+          maxStarvationDelay:        4,    // seconds before starvation recovery kicks in
+          maxLoadingDelay:           4,
+
+          // ── Network timeouts & retries ───────────────────────────────
+          manifestLoadingTimeOut:    20000,
+          manifestLoadingMaxRetry:   4,
+          manifestLoadingRetryDelay: 1000,
+          levelLoadingTimeOut:       20000,
+          levelLoadingMaxRetry:      4,
+          fragLoadingTimeOut:        20000,
+          fragLoadingMaxRetry:       6,
+          fragLoadingRetryDelay:     500,
+
+          // ── ABR — start with lowest quality and ramp up quickly ──────
+          startLevel:                -1,   // auto
+          abrEwmaDefaultEstimate:    500000, // 500 kbps initial estimate
         });
+
         hlsRef.current = hls as unknown as { destroy: () => void; currentLevel: number };
         hls.loadSource(source.url);
         hls.attachMedia(video);
+
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           setLevels(
             hls.levels.map((level, index) => ({
@@ -110,17 +144,45 @@ export default function VideoPlayer({ source }: { source: PlayerSource }) {
           setReady(true);
           void video.play().catch(() => undefined);
         });
-        hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) => setActiveLevel(hls.autoLevelEnabled ? -1 : data.level));
+
+        hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) =>
+          setActiveLevel(hls.autoLevelEnabled ? -1 : data.level),
+        );
+
+        let mediaErrorCount = 0;
         hls.on(Hls.Events.ERROR, (_event, data) => {
-          if (!data.fatal) return;
-          if (data.type === "mediaError") {
-            hls.recoverMediaError();
+          // Non-fatal: hls.js handles internally — just show buffering
+          if (!data.fatal) {
+            if (data.type === "networkError" || data.type === "mediaError") {
+              setBuffering(true);
+            }
             return;
           }
+
+          // Fatal media error — try to recover up to 3 times
+          if (data.type === "mediaError") {
+            mediaErrorCount += 1;
+            if (mediaErrorCount <= 3) {
+              hls.recoverMediaError();
+              return;
+            }
+          }
+
+          // Fatal network error on live — try to restart the stream
+          if (data.type === "networkError" && isLiveStream) {
+            hls.stopLoad();
+            window.setTimeout(() => {
+              if (!disposed) {
+                hls.startLoad();
+              }
+            }, 3000);
+            return;
+          }
+
           setError(
             data.type === "networkError"
-              ? "The stream could not be reached. The source may be offline or blocking this network."
-              : "Playback failed in the browser. Try another stream or reload.",
+              ? "O stream não está acessível. A fonte pode estar offline ou a bloquear esta rede."
+              : "A reprodução falhou. Tente outro canal ou recarregue.",
           );
           setBuffering(false);
         });
@@ -154,6 +216,53 @@ export default function VideoPlayer({ source }: { source: PlayerSource }) {
     video.addEventListener("loadedmetadata", onLoaded, { once: true });
     return () => video.removeEventListener("loadedmetadata", onLoaded);
   }, [source.isLive, source.resumeAt]);
+
+  // Live stream stall recovery — when buffering stalls on a live channel,
+  // jump to the live edge instead of repeating old content.
+  useEffect(() => {
+    if (!source.isLive) return;
+    const video = videoRef.current;
+    if (!video) return;
+
+    let stallTimer: number | null = null;
+
+    const onWaiting = () => {
+      // Give hls.js 4 seconds to recover naturally first
+      stallTimer = window.setTimeout(() => {
+        const hls = hlsRef.current as unknown as {
+          liveSyncPosition?: number;
+          startLoad: () => void;
+        } | null;
+        if (!hls || !video) return;
+
+        // Jump to live edge if available
+        const liveEdge = hls.liveSyncPosition;
+        if (liveEdge && Number.isFinite(liveEdge) && Math.abs(video.currentTime - liveEdge) > 5) {
+          video.currentTime = liveEdge;
+        }
+        // Restart loading if stalled
+        hls.startLoad();
+      }, 4000);
+    };
+
+    const onPlaying = () => {
+      if (stallTimer) {
+        window.clearTimeout(stallTimer);
+        stallTimer = null;
+      }
+    };
+
+    video.addEventListener("waiting", onWaiting);
+    video.addEventListener("playing", onPlaying);
+    video.addEventListener("canplay", onPlaying);
+
+    return () => {
+      if (stallTimer) window.clearTimeout(stallTimer);
+      video.removeEventListener("waiting", onWaiting);
+      video.removeEventListener("playing", onPlaying);
+      video.removeEventListener("canplay", onPlaying);
+    };
+  }, [source.isLive, attempt]);
 
   useEffect(() => {
     const video = videoRef.current;
