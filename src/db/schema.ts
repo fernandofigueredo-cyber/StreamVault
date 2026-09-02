@@ -165,8 +165,40 @@ export const epgPrograms = pgTable(
   (table) => [index("epg_item_idx").on(table.itemId, table.startsAt)],
 );
 
+export const profiles = pgTable(
+  "profiles",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    avatar: text("avatar"),
+    pin: text("pin"),
+    isKids: boolean("is_kids").notNull().default(false),
+    isDefault: boolean("is_default").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("profiles_user_idx").on(table.userId)],
+);
+
+export const searchHistory = pgTable(
+  "search_history",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    profileId: integer("profile_id"),
+    query: text("query").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("search_history_user_idx").on(table.userId, table.createdAt)],
+);
+
 export type User = typeof users.$inferSelect;
 export type Playlist = typeof playlists.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type Channel = typeof channels.$inferSelect;
 export type EpgProgram = typeof epgPrograms.$inferSelect;
+export type Profile = typeof profiles.$inferSelect;
