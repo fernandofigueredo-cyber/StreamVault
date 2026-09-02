@@ -32,6 +32,25 @@ create index if not exists channels_user_kind_group_idx on channels(user_id, kin
 create index if not exists epg_item_time_idx on epg_programs(item_id, starts_at, ends_at);
 create index if not exists favorites_user_idx on favorites(user_id);
 create index if not exists watch_history_user_idx on watch_history(user_id);
+create table if not exists profiles (
+  id serial primary key,
+  user_id integer not null references users(id) on delete cascade,
+  name text not null,
+  avatar text,
+  pin text,
+  is_kids boolean not null default false,
+  is_default boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index if not exists profiles_user_idx on profiles(user_id);
+create table if not exists search_history (
+  id serial primary key,
+  user_id integer not null references users(id) on delete cascade,
+  profile_id integer,
+  query text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists search_history_user_idx on search_history(user_id, created_at);
 `;
 
 const SCHEMA_SQL = `
