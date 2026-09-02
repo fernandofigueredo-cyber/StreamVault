@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  CalendarDays,
   Clapperboard,
   Heart,
   History,
@@ -15,20 +16,23 @@ import {
   Search,
   Settings,
   Tv,
+  UserCircle2,
   X,
 } from "lucide-react";
 import { cn, initialsOf } from "@/lib/utils";
 
 const NAV = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/live", label: "Live TV", icon: Radio },
-  { href: "/movies", label: "Movies", icon: Clapperboard },
-  { href: "/series", label: "Series", icon: Tv },
-  { href: "/search", label: "Search", icon: Search },
-  { href: "/favorites", label: "Favourites", icon: Heart },
-  { href: "/history", label: "Continue watching", icon: History },
-  { href: "/playlists", label: "Playlists", icon: ListVideo },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/dashboard",  label: "Painel",             icon: LayoutDashboard },
+  { href: "/live",       label: "TV ao Vivo",          icon: Radio },
+  { href: "/epg",        label: "Guia EPG",            icon: CalendarDays },
+  { href: "/movies",     label: "Filmes",              icon: Clapperboard },
+  { href: "/series",     label: "Séries",              icon: Tv },
+  { href: "/search",     label: "Pesquisar",           icon: Search },
+  { href: "/favorites",  label: "Favoritos",           icon: Heart },
+  { href: "/history",    label: "Continuar a ver",     icon: History },
+  { href: "/profiles",   label: "Perfis",              icon: UserCircle2 },
+  { href: "/playlists",  label: "Listas",              icon: ListVideo },
+  { href: "/settings",   label: "Definições",          icon: Settings },
 ];
 
 const STORAGE_KEY = "streamvault.sidebar.collapsed";
