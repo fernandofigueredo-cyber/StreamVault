@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Heart,
   LayoutGrid,
+  LayoutList,
   ListFilter,
   RefreshCw,
   Search as SearchIcon,
@@ -16,7 +17,7 @@ import {
 } from "lucide-react";
 import type { LibraryItem } from "@/lib/queries";
 import { EmptyState, ErrorNotice, MediaCard, SkeletonGrid, useFavorites } from "@/components/ui";
-import { cn } from "@/lib/utils";
+import { cn, gradientFor, initialsOf } from "@/lib/utils";
 
 type CategoryRow = { id: number; name: string; itemCount: number };
 type Mode = "library" | "favorites" | "search";
@@ -59,6 +60,8 @@ export default function BrowseView({
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mobileCatOpen, setMobileCatOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [sortBy, setSortBy] = useState<"default" | "name" | "recent">("default");
   const firstRender = useRef(true);
   const { toggle, pending } = useFavorites();
 
@@ -176,6 +179,53 @@ export default function BrowseView({
       : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5",
   );
 
+  function renderItems(items: LibraryItem[]) {
+    if (viewMode === "list") {
+      return (
+        <ul className="space-y-2">
+          {items.map((item) => {
+            const href = item.kind === "series" ? `/series/${item.id}` : `/watch/${item.id}`;
+            return (
+              <li key={item.id} className="card group flex items-center gap-3 rounded-2xl p-3 transition hover:border-white/15">
+                <Link href={href} className="relative h-14 w-24 shrink-0 overflow-hidden rounded-xl bg-ink-800">
+                  {item.logo
+                    ? <img src={item.logo} alt={item.name} className="h-full w-full object-cover" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display="none"; }} />
+                    : <div className={cn("flex h-full w-full items-center justify-center bg-gradient-to-br text-xs font-bold text-white", gradientFor(item.name))}>{initialsOf(item.name)}</div>
+                  }
+                  {item.kind === "live" && <span className="absolute left-1 top-1 rounded bg-rose-500 px-1 py-0.5 text-[9px] font-bold text-white">AO VIVO</span>}
+                </Link>
+                <Link href={href} className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-white">{item.name}</p>
+                  <p className="mt-0.5 truncate text-xs text-slate-400">{item.nowPlaying?.title ?? item.genre ?? item.groupTitle ?? "—"}</p>
+                  {item.nowPlaying && <p className="mt-1 text-[11px] text-accent-400">até {new Date(item.nowPlaying.endsAt).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</p>}
+                </Link>
+                <button type="button"
+                  onClick={() => { setItems((prev) => prev.map((r) => r.id === item.id ? { ...r, isFavorite: !r.isFavorite } : r)); void toggle({ id: item.id, isFavorite: item.isFavorite }, (next) => { setItems((prev) => prev.map((r) => r.id === item.id ? { ...r, isFavorite: next } : r)); }); }}
+                  className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/10 bg-white/5 transition hover:bg-white/10", item.isFavorite ? "text-rose-400" : "text-slate-400")}>
+                  <Heart className={cn("h-4 w-4", item.isFavorite && "fill-current")} />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      );
+    }
+    return (
+      <div className={gridClass}>
+        {items.map((item) => (
+          <MediaCard
+            key={item.id}
+            item={item}
+            href={item.kind === "series" ? `/series/${item.id}` : `/watch/${item.id}`}
+            onToggleFavorite={onToggleFavorite}
+            favoritePending={pending[item.id]}
+            progress={item.positionSecs}
+          />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
 
@@ -201,13 +251,39 @@ export default function BrowseView({
               </select>
             </div>
           ) : null}
+
+          {/* Sort */}
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as "default" | "name" | "recent")}
+            className="appearance-none rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-slate-200 outline-none focus:border-brand-400/50"
+          >
+            <option value="default">Ordem padrão</option>
+            <option value="name">Por nome (A-Z)</option>
+            <option value="recent">Recentemente vistos</option>
+          </select>
+
+          {/* View toggle */}
+          <div className="flex rounded-xl border border-white/10 bg-black/30 p-0.5">
+            <button type="button" onClick={() => setViewMode("grid")}
+              className={cn("grid h-8 w-8 place-items-center rounded-lg transition",
+                viewMode === "grid" ? "bg-brand-500 text-white" : "text-slate-400 hover:text-white")}>
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+            <button type="button" onClick={() => setViewMode("list")}
+              className={cn("grid h-8 w-8 place-items-center rounded-lg transition",
+                viewMode === "list" ? "bg-brand-500 text-white" : "text-slate-400 hover:text-white")}>
+              <LayoutList className="h-4 w-4" />
+            </button>
+          </div>
+
           <div className="relative">
             <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Pesquisar…"
-              className="w-44 rounded-xl border border-white/10 bg-black/30 py-2 pl-9 pr-3 text-sm outline-none transition placeholder:text-slate-500 focus:border-brand-400/50 focus:ring-2 focus:ring-brand-500/20 sm:w-56"
+              className="w-44 rounded-xl border border-white/10 bg-black/30 py-2 pl-9 pr-3 text-sm outline-none transition placeholder:text-slate-500 focus:border-brand-400/50 focus:ring-2 focus:ring-brand-500/20 sm:w-48"
             />
           </div>
         </div>
@@ -360,18 +436,7 @@ export default function BrowseView({
               <p className="text-xs text-slate-500">
                 {items.length.toLocaleString("pt-BR")} de {total.toLocaleString("pt-BR")}
               </p>
-              <div className={gridClass}>
-                {items.map((item) => (
-                  <MediaCard
-                    key={item.id}
-                    item={item}
-                    href={hrefFor(item)}
-                    onToggleFavorite={onToggleFavorite}
-                    favoritePending={pending[item.id]}
-                    progress={item.positionSecs}
-                  />
-                ))}
-              </div>
+              {renderItems(items)}
               {hasMore ? (
                 <div className="flex justify-center">
                   <button
