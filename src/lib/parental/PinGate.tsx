@@ -8,7 +8,6 @@ export function PinGate({ open, onOpenChange, onSuccess }: { open: boolean, onOp
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState(0);
   const { pinHash, unlock, addFailedAttempt, failedAttempts, lockoutUntil } = useParentalStore();
-
   const isLockedOut = lockoutUntil && Date.now() < lockoutUntil;
 
   useEffect(() => {
@@ -21,7 +20,7 @@ export function PinGate({ open, onOpenChange, onSuccess }: { open: boolean, onOp
   }, [isLockedOut, lockoutUntil]);
 
   async function handleConfirm() {
-    if (!pinHash) { setError('Nenhum PIN configurado. Vá em Definições.'); return; }
+    if (!pinHash) { setError('Nenhum PIN configurado.'); return; }
     const h = await hashPin(pin);
     if (h === pinHash) {
       unlock();
@@ -38,24 +37,16 @@ export function PinGate({ open, onOpenChange, onSuccess }: { open: boolean, onOp
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4">
       <div className="w-full max-w-sm rounded-2xl bg-[#1a1a1a] border border-zinc-800 p-6 text-white">
         <h2 className="text-lg font-bold mb-1">🔒 Conteúdo Bloqueado</h2>
-        <p className="text-sm text-zinc-400 mb-4">Digite o PIN de 4 dígitos. Desbloqueio de 15 min.</p>
-        <input
-          type="password"
-          maxLength={4}
-          value={pin}
-          onChange={e => setPin(e.target.value.replace(/\D/g,''))}
-          placeholder="****"
-          className="w-full text-center text-3xl tracking-[0.6em] bg-zinc-900 border border-zinc-700 rounded-xl py-3 mb-3 outline-none focus:border-violet-600"
-          autoFocus
-        />
+        <p className="text-sm text-zinc-400 mb-4">Digite o PIN de 4 dígitos.</p>
+        <input type="password" maxLength={4} value={pin} onChange={e => setPin(e.target.value.replace(/\D/g,''))} placeholder="****" className="w-full text-center text-3xl tracking-[0.6em] bg-zinc-900 border border-zinc-700 rounded-xl py-3 mb-3 outline-none" autoFocus />
         {error && <p className="text-sm text-red-500 mb-2">{error}</p>}
-        {isLockedOut && <p className="text-sm text-yellow-500 mb-2">Aguarde {countdown}s - muitas tentativas</p>}
+        {isLockedOut && <p className="text-sm text-yellow-500 mb-2">Aguarde {countdown}s</p>}
         <div className="flex gap-2">
           <button onClick={() => onOpenChange(false)} className="flex-1 py-3 rounded-xl bg-zinc-800">Cancelar</button>
-          <button onClick={handleConfirm} disabled={pin.length !== 4 || !!isLockedOut} className="flex-1 py-3 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-50 font-bold">Desbloquear</button>
+          <button onClick={handleConfirm} disabled={pin.length !== 4 || !!isLockedOut} className="flex-1 py-3 rounded-xl bg-violet-600 disabled:opacity-50 font-bold">Desbloquear</button>
         </div>
       </div>
     </div>
