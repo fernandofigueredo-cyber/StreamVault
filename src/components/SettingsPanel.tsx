@@ -1,5 +1,6 @@
 "use client";
 
+import { ParentalSettings } from './parental/ParentalSettings';
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Eraser, Volume2 } from "lucide-react";
