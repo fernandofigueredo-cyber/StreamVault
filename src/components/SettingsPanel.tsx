@@ -36,6 +36,8 @@ export default function SettingsPanel({ user }: { user: { name: string; email: s
   }, []);
 
   return (
+    <div className="space-y-6">
+    <ParentalSettings />
     <div className="grid gap-4 lg:grid-cols-2">
       <section className="card rounded-2xl p-5">
         <h2 className="text-sm font-semibold text-white">Account</h2>
