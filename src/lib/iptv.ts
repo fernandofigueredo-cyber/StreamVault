@@ -305,7 +305,6 @@ export async function ingestEntries(
       name: entry.name.slice(0, 300),
       logo: entry.logo ?? null,
       groupTitle: group === "Uncategorized" ? null : group,
-      isAdult,
       streamUrl: entry.url,
       tvgId: entry.tvgId ?? null,
       externalId: entry.externalId ?? null,
