@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowRight, Heart } from "lucide-react";
 import type { LibraryItem } from "@/lib/queries";
 import { MediaCard, Rail, useFavorites } from "@/components/ui";
+import { ParentalGuard } from "./parental/ParentalGuard";
 
 function hrefFor(item: LibraryItem) {
   if (item.kind === "series") return `/series/${item.id}`;
@@ -47,17 +48,19 @@ export default function ItemRail({
       }
     >
       {items.map((item) => (
-        <div key={item.id} className="w-[220px] shrink-0 snap-start sm:w-[240px]">
-          <MediaCard
-            item={item}
-            href={hrefFor(item)}
-            onToggleFavorite={(target) =>
-              void toggle(target, () => undefined)
-            }
-            favoritePending={pending[item.id]}
-            progress={item.positionSecs}
-          />
-        </div>
+        <ParentalGuard key={item.id} item={item}>
+          <div className="w-[220px] shrink-0 snap-start sm:w-[240px]">
+            <MediaCard
+              item={item}
+              href={hrefFor(item)}
+              onToggleFavorite={(target) =>
+                void toggle(target, () => undefined)
+              }
+              favoritePending={pending[item.id]}
+              progress={item.positionSecs}
+            />
+          </div>
+        </ParentalGuard>
       ))}
     </Rail>
   );
