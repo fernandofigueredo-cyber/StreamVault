@@ -291,12 +291,6 @@ export async function ingestEntries(
     else if (entry.kind === "movie") counts.movieCount += 1;
     else counts.seriesCount += 1;
 
-    const isAdult = isAdultContent({ 
-  category: group, 
-  title: entry.name, 
-  rating: entry.rating ?? '' 
-});
-    
     batch.push({
       userId,
       playlistId,
