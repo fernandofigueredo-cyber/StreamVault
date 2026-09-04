@@ -229,8 +229,9 @@ void tick;
         return;
       }
       video.src = source.url;
+      video.load();
       setReady(true);
-      void video.play().catch(() => undefined);
+      setBuffering(false);
     }
 
     void attach();
