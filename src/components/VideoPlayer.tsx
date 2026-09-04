@@ -44,7 +44,7 @@ const POSITION_KEY = "streamvault.player.positions";
 export default function VideoPlayer({ source }: { source: PlayerSource }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
-  const hlsRef = useRef<{ destroy: () => void; currentLevel: number } | null>(null);
+  const hlsRef = useRef<Hls | null>(null);
   const hideTimer = useRef<number | null>(null);
   const lastSaved = useRef(0);
 
