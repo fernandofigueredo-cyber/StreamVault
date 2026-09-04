@@ -170,10 +170,7 @@ void tick;
           abrEwmaDefaultEstimate: 500000,
         });
 
-        hlsRef.current = hls as unknown as {
-  destroy: () => void;
-  currentLevel: number;
-};
+      hlsRef.current = hls;
     
         hls.loadSource(source.url);
         hls.attachMedia(video);
