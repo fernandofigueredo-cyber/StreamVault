@@ -184,8 +184,8 @@ void tick;
               bitrate: level.bitrate ?? 0,
             })),
           );
-          setReady(true);
-          void video.play().catch(() => undefined);
+         setReady(true);
+         setBuffering(false);
         });
 
         hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) =>
