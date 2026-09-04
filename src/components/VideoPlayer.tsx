@@ -98,9 +98,9 @@ const blocked =
     // C) Sem perfil selecionado + parental global ON
     (!profile && parental.enabled)
   );
-  const blocked = parental.enabled && isAdult && !isUnlocked;
-  // force re-render each second to auto-lock after 15min
-  void tick;
+
+// force re-render each second to auto-lock after 15min
+void tick;
 
   const isHls = source.forceHls ?? /\.m3u8(\?|$)/i.test(source.url);
 
