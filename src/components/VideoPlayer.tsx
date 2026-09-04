@@ -242,7 +242,7 @@ void tick;
       video.removeAttribute("src");
       video.load();
     };
-  }, [source.url, isHls, attempt, blocked, source.isLive]);
+    }, [source.url, isHls, attempt, source.isLive]);
 
   // Resume position for on-demand content.
   useEffect(() => {
