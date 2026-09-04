@@ -209,11 +209,28 @@ function ProfileForm({
               className="w-full rounded-xl border border-white/10 bg-black/30 px-3.5 py-2.5 text-sm text-white outline-none focus:border-brand-400/60 focus:ring-2 focus:ring-brand-500/20" />
           </Field>
 
-          <Field label="PIN (opcional — 4 dígitos)">
-            <input value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
-              type="password" inputMode="numeric" placeholder="••••"
-              className="w-full rounded-xl border border-white/10 bg-black/30 px-3.5 py-2.5 text-sm text-white outline-none focus:border-brand-400/60 focus:ring-2 focus:ring-brand-500/20" />
-          </Field>
+          {isKids ? (
+  <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm">
+    <p className="font-semibold text-emerald-200">🔒 Protegido pelo Controle Parental</p>
+    <p className="mt-1 text-xs text-emerald-100/80">
+      Este perfil vai usar o PIN definido nas Definições. Não é preciso criar um PIN separado.
+    </p>
+    {!hasParentalPin && (
+      <p className="mt-2 rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+        ⚠️ Ainda não definiste um PIN no Controle Parental.{" "}
+        <Link href="/settings" className="font-semibold underline hover:text-amber-100">
+          Definir agora
+        </Link>.
+      </p>
+    )}
+  </div>
+) : (
+  <Field label="PIN (opcional — 4 dígitos)">
+    <input value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+      type="password" inputMode="numeric" placeholder="••••"
+      className="w-full rounded-xl border border-white/10 bg-black/30 px-3.5 py-2.5 text-sm text-white outline-none focus:border-brand-400/60 focus:ring-2 focus:ring-brand-500/20" />
+  </Field>
+)}
 
           <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 transition hover:bg-white/10">
             <input type="checkbox" checked={isKids} onChange={(e) => setIsKids(e.target.checked)} className="h-4 w-4 accent-brand-500" />
@@ -230,7 +247,7 @@ function ProfileForm({
               Cancelar
             </button>
             <button type="button"
-              onClick={() => onSave({ name, avatar, pin: pin || undefined, isKids })}
+              onClick={() => onSave({ name, avatar, pin: isKids ? undefined : (pin || undefined), isKids })}
               disabled={!name.trim()}
               className="flex-1 rounded-xl bg-brand-500 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-50">
               Guardar
