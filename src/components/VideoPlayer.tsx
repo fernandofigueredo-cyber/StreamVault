@@ -175,17 +175,26 @@ void tick;
         hls.loadSource(source.url);
         hls.attachMedia(video);
 
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          setLevels(
-            hls.levels.map((level, index) => ({
-              index,
-              height: level.height ?? 0,
-              bitrate: level.bitrate ?? 0,
-            })),
-          );
-         setReady(true);
-         setBuffering(false);
-        });
+       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+  setLevels(
+    hls.levels.map((level, index) => ({
+      index,
+      height: level.height ?? 0,
+      bitrate: level.bitrate ?? 0,
+    })),
+  );
+
+  setReady(true);
+  setBuffering(false);
+
+  void video.play().catch(() => {
+    // O navegador pode bloquear o autoplay.
+    // Isso não significa que o canal está offline.
+    setPlaying(false);
+    setReady(true);
+    setBuffering(false);
+  });
+});
 
         hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) =>
           setActiveLevel(hls.autoLevelEnabled ? -1 : data.level),
