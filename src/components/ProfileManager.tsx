@@ -1,5 +1,8 @@
 "use client";
 
+import Link from "next/link";
+import { useParentalStore } from "@/stores/parentalStore";
+import { hashPin } from "@/lib/parental";
 import { useState } from "react";
 import { Baby, Check, Pencil, Plus, Shield, Trash2, User, X } from "lucide-react";
 import { cn, gradientFor, initialsOf } from "@/lib/utils";
