@@ -369,28 +369,20 @@ void tick;
   setBuffering(true);
 
   try {
+    if (hlsRef.current) {
+      hlsRef.current.startLoad(-1);
+    }
+
     await video.play();
   } catch (playError) {
-    const errorName =
-      playError instanceof DOMException ? playError.name : "";
+    console.error("Falha real do video.play():", playError);
+    console.error("MediaError:", video.error);
 
-    console.error("Falha ao reproduzir o stream:", playError);
-
+    // Não mostrar "stream indisponível" por uma falha de play().
+    // Os erros reais da transmissão serão tratados pelo hls.js.
     setPlaying(false);
     setBuffering(false);
     setReady(true);
-
-    // Essas falhas não significam que o canal está offline.
-    if (
-      errorName === "AbortError" ||
-      errorName === "NotAllowedError"
-    ) {
-      return;
-    }
-
-    setError(
-      "Não foi possível reproduzir este canal. A fonte pode estar offline ou usar um formato incompatível.",
-    );
   }
 }, []);
 
