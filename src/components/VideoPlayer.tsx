@@ -1,14 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Hls from "hls.js";
 import {
-Loader2,
-Maximize,
-@@ -15,8 +15,12 @@ import {
-Volume2,
-VolumeX,
-Wifi,
+  Loader2,
+  Maximize,
+  Minimize,
+  Pause,
+  PictureInPicture2,
+  Play,
+  RotateCcw,
+  Settings2,
+  SkipBack,
+  SkipForward,
+  Volume2,
+  VolumeX,
+  Wifi,
   Lock,
 } from "lucide-react";
 import { cn, formatTime } from "@/lib/utils";
@@ -18,101 +25,141 @@ import { PinGate } from "./parental/PinGate";
 
 type Level = { index: number; height: number; bitrate: number };
 
-@@ -27,7 +31,6 @@ export type PlayerSource = {
-url: string;
-isLive: boolean;
-resumeAt?: number | null;
+export type PlayerSource = {
+  itemId: string | number;
+  title: string;
+  subtitle?: string;
+  url: string;
+  isLive: boolean;
+  resumeAt?: number | null;
   /** Force the HLS pipeline when playback goes through the signed proxy. */
-forceHls?: boolean;
+  forceHls?: boolean;
 };
 
-@@ -58,6 +61,29 @@ export default function VideoPlayer({ source }: { source: PlayerSource }) {
-const [controlsVisible, setControlsVisible] = useState(true);
-const [attempt, setAttempt] = useState(0);
+const VOLUME_KEY = "streamvault.player.volume";
+const MUTED_KEY = "streamvault.player.muted";
+const POSITION_KEY = "streamvault.player.positions";
+
+export default function VideoPlayer({ source }: { source: PlayerSource }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const hlsRef = useRef<{ destroy: () => void; currentLevel: number } | null>(null);
+  const hideTimer = useRef<number | null>(null);
+  const lastSaved = useRef(0);
+
+  const [playing, setPlaying] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [buffering, setBuffering] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [current, setCurrent] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [buffered, setBuffered] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [muted, setMuted] = useState(false);
+  const [levels, setLevels] = useState<Level[]>([]);
+  const [activeLevel, setActiveLevel] = useState(-1);
+  const [showMenu, setShowMenu] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const [attempt, setAttempt] = useState(0);
 
   // Parental
   const parental = useParentalStore();
   const [showPin, setShowPin] = useState(false);
   const [tick, setTick] = useState(0);
   const isAdult = useMemo(() => {
-    return isAdultContent({ 
-      title: source.title, 
-      category: source.subtitle || '', 
-      name: source.title 
+    return isAdultContent({
+      title: source.title,
+      category: source.subtitle || "",
+      name: source.title,
     });
   }, [source.title, source.subtitle]);
-  
+
   useEffect(() => {
     if (!parental.isUnlocked) return;
-    const id = setInterval(() => setTick(t => t+1), 1000);
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
   }, [parental.isUnlocked, parental.unlockedUntil]);
 
-  const isUnlocked = parental.isUnlocked && parental.unlockedUntil ? Date.now() < parental.unlockedUntil : false;
+  const isUnlocked =
+    parental.isUnlocked && parental.unlockedUntil
+      ? Date.now() < parental.unlockedUntil
+      : false;
   const blocked = parental.enabled && isAdult && !isUnlocked;
   // force re-render each second to auto-lock after 15min
   void tick;
 
-const isHls = source.forceHls ?? /\.m3u8(\?|$)/i.test(source.url);
+  const isHls = source.forceHls ?? /\.m3u8(\?|$)/i.test(source.url);
 
-useEffect(() => {
-@@ -66,8 +92,12 @@ export default function VideoPlayer({ source }: { source: PlayerSource }) {
-setMuted(window.localStorage.getItem(MUTED_KEY) === "1");
-}, []);
+  useEffect(() => {
+    setVolume(Number(window.localStorage.getItem(VOLUME_KEY) ?? "1"));
+    setMuted(window.localStorage.getItem(MUTED_KEY) === "1");
+  }, []);
 
   // Attach the stream (HLS via hls.js, native otherwise).
-useEffect(() => {
+  useEffect(() => {
     if (blocked) {
       setReady(false);
       setBuffering(false);
       return;
     }
-const video = videoRef.current;
-if (!video) return;
-setReady(false);
-@@ -91,544 +121,6 @@ export default function VideoPlayer({ source }: { source: PlayerSource }) {
-}
-const isLiveStream = source.isLive;
-const hls = new Hls({
+    const video = videoRef.current;
+    if (!video) return;
+    setReady(false);
+    setBuffering(true);
+    setError(null);
+    let disposed = false;
+
+    async function attach() {
+      if (!video) return;
+      if (isHls && !video.canPlayType("application/vnd.apple.mpegurl")) {
+        if (!Hls.isSupported()) {
+          setError("HLS is not supported in this browser.");
+          return;
+        }
+        const isLiveStream = source.isLive;
+        const hls = new Hls({
           // ── Core ──────────────────────────────────────────────────────
-enableWorker: true,
-lowLatencyMode: false,
+          enableWorker: true,
+          lowLatencyMode: false,
 
           // ── Buffer — live TV needs a bigger runway to avoid stalls ───
-          maxBufferLength:           isLiveStream ? 60  : 30,
-          maxMaxBufferLength:        isLiveStream ? 120 : 60,
-          maxBufferSize:             60 * 1000 * 1000,   // 60 MB
-          backBufferLength:          isLiveStream ? 0   : 30, // don't keep back-buffer for live
-          maxBufferHole:             0.5,  // tolerance for gaps in segments
+          maxBufferLength: isLiveStream ? 60 : 30,
+          maxMaxBufferLength: isLiveStream ? 120 : 60,
+          maxBufferSize: 60 * 1000 * 1000, // 60 MB
+          backBufferLength: isLiveStream ? 0 : 30,
+          maxBufferHole: 0.5,
 
-          // ── Live sync — prevent drifting behind the live edge ────────
-          liveSyncDurationCount:     3,    // stay 3 segments behind live edge
-          liveMaxLatencyDurationCount: 10, // max drift before re-sync
-          liveDurationInfinity:      true, // treat live as infinite duration
+          // ── Live sync ────────────────────────────────────────────────
+          liveSyncDurationCount: 3,
+          liveMaxLatencyDurationCount: 10,
+          liveDurationInfinity: true,
 
-          // ── Stall recovery — key fix for the repeating content bug ───
-          // When a stall is detected, nudge forward instead of seeking to 0
-          nudgeMaxRetry:             10,
-          nudgeOffset:               0.2,  // seconds to nudge on each stall
-          maxStarvationDelay:        4,    // seconds before starvation recovery kicks in
-          maxLoadingDelay:           4,
+          // ── Stall recovery ───────────────────────────────────────────
+          nudgeMaxRetry: 10,
+          nudgeOffset: 0.2,
+          maxStarvationDelay: 4,
+          maxLoadingDelay: 4,
 
           // ── Network timeouts & retries ───────────────────────────────
-          manifestLoadingTimeOut:    20000,
-          manifestLoadingMaxRetry:   4,
+          manifestLoadingTimeOut: 20000,
+          manifestLoadingMaxRetry: 4,
           manifestLoadingRetryDelay: 1000,
-          levelLoadingTimeOut:       20000,
-          levelLoadingMaxRetry:      4,
-          fragLoadingTimeOut:        20000,
-          fragLoadingMaxRetry:       6,
-          fragLoadingRetryDelay:     500,
+          levelLoadingTimeOut: 20000,
+          levelLoadingMaxRetry: 4,
+          fragLoadingTimeOut: 20000,
+          fragLoadingMaxRetry: 6,
+          fragLoadingRetryDelay: 500,
 
-          // ── ABR — start with lowest quality and ramp up quickly ──────
-          startLevel:                -1,   // auto
-          abrEwmaDefaultEstimate:    500000, // 500 kbps initial estimate
+          // ── ABR ──────────────────────────────────────────────────────
+          startLevel: -1,
+          abrEwmaDefaultEstimate: 500000,
         });
 
-        hlsRef.current = hls as unknown as { destroy: () => void; currentLevel: number };
+        hlsRef.current = hls as unknown as {
+          destroy: () => void;
+          currentLevel: number;
+        };
         hls.loadSource(source.url);
         hls.attachMedia(video);
 
@@ -134,7 +181,6 @@ lowLatencyMode: false,
 
         let mediaErrorCount = 0;
         hls.on(Hls.Events.ERROR, (_event, data) => {
-          // Non-fatal: hls.js handles internally — just show buffering
           if (!data.fatal) {
             if (data.type === "networkError" || data.type === "mediaError") {
               setBuffering(true);
@@ -142,7 +188,6 @@ lowLatencyMode: false,
             return;
           }
 
-          // Fatal media error — try to recover up to 3 times
           if (data.type === "mediaError") {
             mediaErrorCount += 1;
             if (mediaErrorCount <= 3) {
@@ -151,7 +196,6 @@ lowLatencyMode: false,
             }
           }
 
-          // Fatal network error on live — try to restart the stream
           if (data.type === "networkError" && isLiveStream) {
             hls.stopLoad();
             window.setTimeout(() => {
@@ -185,7 +229,7 @@ lowLatencyMode: false,
       video.removeAttribute("src");
       video.load();
     };
-  }, [source.url, isHls, attempt]);
+  }, [source.url, isHls, attempt, blocked, source.isLive]);
 
   // Resume position for on-demand content.
   useEffect(() => {
@@ -200,8 +244,7 @@ lowLatencyMode: false,
     return () => video.removeEventListener("loadedmetadata", onLoaded);
   }, [source.isLive, source.resumeAt]);
 
-  // Live stream stall recovery — when buffering stalls on a live channel,
-  // jump to the live edge instead of repeating old content.
+  // Live stream stall recovery.
   useEffect(() => {
     if (!source.isLive) return;
     const video = videoRef.current;
@@ -210,7 +253,6 @@ lowLatencyMode: false,
     let stallTimer: number | null = null;
 
     const onWaiting = () => {
-      // Give hls.js 4 seconds to recover naturally first
       stallTimer = window.setTimeout(() => {
         const hls = hlsRef.current as unknown as {
           liveSyncPosition?: number;
@@ -218,12 +260,14 @@ lowLatencyMode: false,
         } | null;
         if (!hls || !video) return;
 
-        // Jump to live edge if available
         const liveEdge = hls.liveSyncPosition;
-        if (liveEdge && Number.isFinite(liveEdge) && Math.abs(video.currentTime - liveEdge) > 5) {
+        if (
+          liveEdge &&
+          Number.isFinite(liveEdge) &&
+          Math.abs(video.currentTime - liveEdge) > 5
+        ) {
           video.currentTime = liveEdge;
         }
-        // Restart loading if stalled
         hls.startLoad();
       }, 4000);
     };
@@ -254,44 +298,59 @@ lowLatencyMode: false,
     video.muted = muted;
   }, [volume, muted]);
 
-  const persist = useCallback((position: number, total: number) => {
-    try {
-      const raw = JSON.parse(window.localStorage.getItem(POSITION_KEY) ?? "{}") as Record<string, number>;
-      raw[String(source.itemId)] = Math.floor(position);
-      window.localStorage.setItem(POSITION_KEY, JSON.stringify(raw));
-      window.localStorage.setItem(
-        "streamvault.player.lastPlayed",
-        JSON.stringify({ itemId: source.itemId, title: source.title, at: Date.now() }),
-      );
-    } catch {
-      /* ignore quota errors */
-    }
-    if (position > 0 && (position - lastSaved.current > 15 || total - position < 5)) {
-      lastSaved.current = position;
-      void fetch("/api/history", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        keepalive: true,
-        body: JSON.stringify({
-          itemId: source.itemId,
-          positionSecs: Math.floor(position),
-          durationSecs: Number.isFinite(total) ? Math.floor(total) : null,
-        }),
-      });
-    }
-  }, [source.itemId, source.title]);
+  const persist = useCallback(
+    (position: number, total: number) => {
+      try {
+        const raw = JSON.parse(
+          window.localStorage.getItem(POSITION_KEY) ?? "{}",
+        ) as Record<string, number>;
+        raw[String(source.itemId)] = Math.floor(position);
+        window.localStorage.setItem(POSITION_KEY, JSON.stringify(raw));
+        window.localStorage.setItem(
+          "streamvault.player.lastPlayed",
+          JSON.stringify({
+            itemId: source.itemId,
+            title: source.title,
+            at: Date.now(),
+          }),
+        );
+      } catch {
+        /* ignore quota errors */
+      }
+      if (position > 0 && (position - lastSaved.current > 15 || total - position < 5)) {
+        lastSaved.current = position;
+        void fetch("/api/history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          keepalive: true,
+          body: JSON.stringify({
+            itemId: source.itemId,
+            positionSecs: Math.floor(position),
+            durationSecs: Number.isFinite(total) ? Math.floor(total) : null,
+          }),
+        });
+      }
+    },
+    [source.itemId, source.title],
+  );
 
   const togglePlay = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
-    if (video.paused) void video.play().catch(() => setError("The browser blocked autoplay. Press play to start."));
+    if (video.paused)
+      void video
+        .play()
+        .catch(() => setError("The browser blocked autoplay. Press play to start."));
     else video.pause();
   }, []);
 
   const seekBy = useCallback((delta: number) => {
     const video = videoRef.current;
     if (!video || !Number.isFinite(video.duration)) return;
-    video.currentTime = Math.min(video.duration - 1, Math.max(0, video.currentTime + delta));
+    video.currentTime = Math.min(
+      video.duration - 1,
+      Math.max(0, video.currentTime + delta),
+    );
   }, []);
 
   const toggleFullscreen = useCallback(async () => {
@@ -304,7 +363,10 @@ lowLatencyMode: false,
     }
     try {
       if (shell.requestFullscreen) await shell.requestFullscreen();
-      else if (video && "webkitEnterFullscreen" in video) (video as HTMLVideoElement & { webkitEnterFullscreen: () => void }).webkitEnterFullscreen();
+      else if (video && "webkitEnterFullscreen" in video)
+        (
+          video as HTMLVideoElement & { webkitEnterFullscreen: () => void }
+        ).webkitEnterFullscreen();
     } catch {
       /* ignore */
     }
@@ -352,8 +414,37 @@ lowLatencyMode: false,
   }, []);
 
   const live = duration === 0 || !Number.isFinite(duration);
-  const progressPercent = live ? 100 : Math.min(100, (current / Math.max(duration, 1)) * 100);
-  const bufferedPercent = live ? 100 : Math.min(100, (buffered / Math.max(duration, 1)) * 100);
+  const progressPercent = live
+    ? 100
+    : Math.min(100, (current / Math.max(duration, 1)) * 100);
+  const bufferedPercent = live
+    ? 100
+    : Math.min(100, (buffered / Math.max(duration, 1)) * 100);
+
+  // Parental block screen
+  if (blocked) {
+    return (
+      <div className="grid aspect-video w-full place-items-center rounded-2xl border border-white/10 bg-black text-center">
+        <div className="max-w-sm px-6">
+          <Lock className="mx-auto h-10 w-10 text-brand-300" />
+          <h3 className="mt-3 text-base font-semibold text-white">
+            Conteúdo protegido
+          </h3>
+          <p className="mt-1.5 text-sm text-slate-400">
+            Introduz o PIN parental para desbloquear este conteúdo.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowPin(true)}
+            className="mx-auto mt-4 flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600"
+          >
+            <Lock className="h-4 w-4" /> Desbloquear
+          </button>
+        </div>
+        {showPin ? <PinGate onClose={() => setShowPin(false)} /> : null}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -385,7 +476,8 @@ lowLatencyMode: false,
         onTimeUpdate={(event) => {
           const video = event.currentTarget;
           setCurrent(video.currentTime);
-          if (video.buffered.length > 0) setBuffered(video.buffered.end(video.buffered.length - 1));
+          if (video.buffered.length > 0)
+            setBuffered(video.buffered.end(video.buffered.length - 1));
           persist(video.currentTime, video.duration);
         }}
         onDurationChange={(event) => setDuration(event.currentTarget.duration)}
@@ -435,8 +527,14 @@ lowLatencyMode: false,
       >
         {!live ? (
           <div className="relative mb-2 h-1.5 w-full rounded-full bg-white/20">
-            <div className="absolute inset-y-0 left-0 rounded-full bg-white/25" style={{ width: `${bufferedPercent}%` }} />
-            <div className="absolute inset-y-0 left-0 rounded-full bg-brand-400" style={{ width: `${progressPercent}%` }} />
+            <div
+              className="absolute inset-y-0 left-0 rounded-full bg-white/25"
+              style={{ width: `${bufferedPercent}%` }}
+            />
+            <div
+              className="absolute inset-y-0 left-0 rounded-full bg-brand-400"
+              style={{ width: `${progressPercent}%` }}
+            />
             <input
               type="range"
               min={0}
@@ -470,7 +568,11 @@ lowLatencyMode: false,
             className="grid h-10 w-10 place-items-center rounded-full bg-white text-black transition hover:scale-105"
             aria-label={playing ? "Pause" : "Play"}
           >
-            {playing ? <Pause className="h-5 w-5 fill-current" /> : <Play className="h-5 w-5 fill-current" />}
+            {playing ? (
+              <Pause className="h-5 w-5 fill-current" />
+            ) : (
+              <Play className="h-5 w-5 fill-current" />
+            )}
           </button>
 
           {!live ? (
@@ -485,8 +587,15 @@ lowLatencyMode: false,
           ) : null}
 
           <div className="group/vol flex items-center gap-1.5">
-            <ControlButton label={muted ? "Unmute" : "Mute"} onClick={() => setMuted((prev) => !prev)}>
-              {muted || volume === 0 ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+            <ControlButton
+              label={muted ? "Unmute" : "Mute"}
+              onClick={() => setMuted((prev) => !prev)}
+            >
+              {muted || volume === 0 ? (
+                <VolumeX className="h-4 w-4" />
+              ) : (
+                <Volume2 className="h-4 w-4" />
+              )}
             </ControlButton>
             <input
               type="range"
@@ -553,7 +662,9 @@ lowLatencyMode: false,
                           activeLevel === level.index && "text-brand-300",
                         )}
                       >
-                        {level.height ? `${level.height}p` : `${Math.round(level.bitrate / 1000)} kbps`}
+                        {level.height
+                          ? `${level.height}p`
+                          : `${Math.round(level.bitrate / 1000)} kbps`}
                       </button>
                     ))}
                 </div>
@@ -563,8 +674,15 @@ lowLatencyMode: false,
             <ControlButton label="Picture in picture" onClick={() => void togglePip()}>
               <PictureInPicture2 className="h-4 w-4" />
             </ControlButton>
-            <ControlButton label="Fullscreen" onClick={() => void toggleFullscreen()}>
-              {fullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+            <ControlButton
+              label="Fullscreen"
+              onClick={() => void toggleFullscreen()}
+            >
+              {fullscreen ? (
+                <Minimize className="h-4 w-4" />
+              ) : (
+                <Maximize className="h-4 w-4" />
+              )}
             </ControlButton>
           </div>
         </div>
@@ -615,4 +733,3 @@ function ControlButton({
     </button>
   );
 }
-          
