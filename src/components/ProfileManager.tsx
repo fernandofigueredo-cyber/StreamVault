@@ -143,13 +143,24 @@ export default function ProfileManager({ initialProfiles }: { initialProfiles: P
         ))}
       </div>
 
-      {(creating || editing !== null) && (
-        <ProfileForm
-          profile={profiles.find((p) => p.id === editing)}
-          onSave={(data) => editing !== null ? void update(editing, data) : void create(data as { name: string; avatar: string; pin: string; isKids: boolean })}
-          onClose={() => { setCreating(false); setEditing(null); }}
-        />
-      )}
+     {(creating || editing !== null) && (
+  <ProfileForm profile={profiles.find((p) => p.id === editing)}
+    onSave={(data) => {
+      const d = data as { name: string; avatar: string; pin?: string; isKids: boolean };
+      // Se NÃO é Kids E existe PIN parental → pede PIN antes
+      if (!d.isKids && parental.pinHash) {
+        setPendingProfileData({ name: d.name, avatar: d.avatar, pin: d.pin, isKids: d.isKids, editingId: editing });
+        setCreating(false);
+        setEditing(null);
+        return;
+      }
+      // Kids OU sem PIN parental → guarda direto
+      if (editing !== null) void update(editing, d);
+      else void create({ name: d.name, avatar: d.avatar, pin: d.pin ?? '', isKids: d.isKids });
+    }}
+    onClose={() => { setCreating(false); setEditing(null); }}
+  />
+)}
     </div>
   );
 }
