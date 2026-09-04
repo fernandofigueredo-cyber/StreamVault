@@ -348,18 +348,41 @@ void tick;
     [source.itemId, source.title],
   );
 
-  const togglePlay = useCallback(() => {
+ const togglePlay = useCallback(async () => {
   const video = videoRef.current;
   if (!video) return;
-  if (video.paused) {
-    void video.play().catch((err) => {
-      // Só mostra erro se NÃO for autoplay policy (autoplay blocked é normal, basta clicar)
-      if (err?.name !== "NotAllowedError" && err?.name !== "AbortError") {
-        setError("A reprodução falhou. Tente novamente.");
-      }
-    });
-  } else {
+
+  if (!video.paused) {
     video.pause();
+    return;
+  }
+
+  setError(null);
+  setBuffering(true);
+
+  try {
+    await video.play();
+  } catch (playError) {
+    const errorName =
+      playError instanceof DOMException ? playError.name : "";
+
+    console.error("Falha ao reproduzir o stream:", playError);
+
+    setPlaying(false);
+    setBuffering(false);
+    setReady(true);
+
+    // Essas falhas não significam que o canal está offline.
+    if (
+      errorName === "AbortError" ||
+      errorName === "NotAllowedError"
+    ) {
+      return;
+    }
+
+    setError(
+      "Não foi possível reproduzir este canal. A fonte pode estar offline ou usar um formato incompatível.",
+    );
   }
 }, []);
 
