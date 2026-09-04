@@ -509,9 +509,11 @@ void tick;
        preload="auto"
        className="h-full w-full bg-black"
        onPlay={() => {
-          setPlaying(true);
-          bumpControls();
-        }}
+        setError(null);
+        setBuffering(false);
+        setPlaying(true);
+        bumpControls();
+      }}
         onPause={() => setPlaying(false)}
         onWaiting={() => setBuffering(true)}
         onPlaying={() => setBuffering(false)}
