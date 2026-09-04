@@ -82,10 +82,22 @@ export default function VideoPlayer({ source }: { source: PlayerSource }) {
     return () => clearInterval(id);
   }, [parental.isUnlocked, parental.unlockedUntil]);
 
-  const isUnlocked =
-    parental.isUnlocked && parental.unlockedUntil
-      ? Date.now() < parental.unlockedUntil
-      : false;
+  const { profile, isParentalDisabledForCurrent } = useCurrentProfile();
+
+const isUnlocked =
+  parental.isUnlocked && parental.unlockedUntil
+    ? Date.now() < parental.unlockedUntil
+    : false;
+
+const blocked =
+  isAdult && !isUnlocked && (
+    // A) Perfil Kids → SEMPRE bloqueia adulto
+    profile?.isKids === true ||
+    // B) Perfil normal → bloqueia se parental global ON E utilizador não desativou aqui
+    (!!profile && !profile.isKids && parental.enabled && !isParentalDisabledForCurrent) ||
+    // C) Sem perfil selecionado + parental global ON
+    (!profile && parental.enabled)
+  );
   const blocked = parental.enabled && isAdult && !isUnlocked;
   // force re-render each second to auto-lock after 15min
   void tick;
