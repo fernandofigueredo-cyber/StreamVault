@@ -102,7 +102,8 @@ const blocked =
 // force re-render each second to auto-lock after 15min
 void tick;
 
-  const isHls = source.forceHls ?? /\.m3u8(\?|$)/i.test(source.url);
+  const isHls =
+  source.forceHls === true || /\.m3u8(\?|$)/i.test(source.url);
 
   useEffect(() => {
     setVolume(Number(window.localStorage.getItem(VOLUME_KEY) ?? "1"));
