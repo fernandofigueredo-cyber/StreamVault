@@ -171,9 +171,10 @@ void tick;
         });
 
         hlsRef.current = hls as unknown as {
-          destroy: () => void;
-          currentLevel: number;
-        };
+  destroy: () => void;
+  currentLevel: number;
+};
+    
         hls.loadSource(source.url);
         hls.attachMedia(video);
 
