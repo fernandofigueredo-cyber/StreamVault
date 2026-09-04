@@ -97,21 +97,44 @@ export async function GET(request: Request, context: Context) {
   const target = readUrl(searchParams.get("u")) ?? item.streamUrl;
 
   const range = request.headers.get("range");
-  let upstream: Response;
-  try {
-    upstream = await fetch(target, {
-      redirect: "follow",
-      cache: "no-store",
-      signal: AbortSignal.timeout(20000),
-      headers: {
-        "User-Agent": "IPTVPlayer/1.0",
-        Accept: "*/*",
-        ...(range ? { Range: range } : {}),
-      },
-    });
-  } catch {
-    return Response.json({ error: "Upstream stream could not be reached." }, { status: 502 });
+
+async function fetchWithRetry(url: string, tries = 3): Promise<Response> {
+  let lastError: unknown;
+  for (let i = 0; i < tries; i++) {
+    try {
+      const res = await fetch(url, {
+        redirect: "follow",
+        cache: "no-store",
+        signal: AbortSignal.timeout(30000),
+        headers: {
+          "User-Agent": "VLC/3.0.20 LibVLC/3.0.20",
+          "Accept": "*/*",
+          "Connection": "keep-alive",
+          ...(range ? { Range: range } : {}),
+        },
+      });
+      // Erros 5xx transitórios (Cloudflare 522/524/502/503) → retry
+      if ([502, 503, 522, 524].includes(res.status) && i < tries - 1) {
+        await new Promise((r) => setTimeout(r, 800 * (i + 1)));
+        continue;
+      }
+      return res;
+    } catch (err) {
+      lastError = err;
+      if (i < tries - 1) {
+        await new Promise((r) => setTimeout(r, 800 * (i + 1)));
+      }
+    }
   }
+  throw lastError;
+}
+
+let upstream: Response;
+try {
+  upstream = await fetchWithRetry(target);
+} catch {
+  return Response.json({ error: "Upstream stream could not be reached." }, { status: 502 });
+}
 
   if (!upstream.ok && upstream.status !== 206) {
     return Response.json(
