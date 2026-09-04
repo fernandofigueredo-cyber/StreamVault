@@ -348,14 +348,19 @@ void tick;
   );
 
   const togglePlay = useCallback(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    if (video.paused)
-      void video
-        .play()
-        .catch(() => setError("The browser blocked autoplay. Press play to start."));
-    else video.pause();
-  }, []);
+  const video = videoRef.current;
+  if (!video) return;
+  if (video.paused) {
+    void video.play().catch((err) => {
+      // Só mostra erro se NÃO for autoplay policy (autoplay blocked é normal, basta clicar)
+      if (err?.name !== "NotAllowedError" && err?.name !== "AbortError") {
+        setError("A reprodução falhou. Tente novamente.");
+      }
+    });
+  } else {
+    video.pause();
+  }
+}, []);
 
   const seekBy = useCallback((delta: number) => {
     const video = videoRef.current;
