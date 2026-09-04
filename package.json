@@ -34,4 +34,3 @@
     "typescript": "5.9.3"
   }
 }
-feat: adicionar db:push automático no build
