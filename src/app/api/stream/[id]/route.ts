@@ -5,6 +5,7 @@ import { channels } from "@/db/schema";
 import { getCurrentUser, unauthorized } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /**
  * Signed playback proxy.
