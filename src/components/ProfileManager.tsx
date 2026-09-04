@@ -167,6 +167,8 @@ function ProfileForm({
   const [avatar, setAvatar] = useState(profile?.avatar ?? "");
   const [pin, setPin] = useState("");
   const [isKids, setIsKids] = useState(profile?.isKids ?? false);
+  const parental = useParentalStore();
+  const hasParentalPin = !!parental.pinHash;
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center p-4">
