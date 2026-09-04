@@ -504,10 +504,11 @@ void tick;
       )}
     >
       <video
-       ref={videoRef}
-       playsInline
-       preload="auto"
-       className="h-full w-full bg-black"
+  ref={videoRef}
+  playsInline
+  autoPlay
+  preload="auto"
+  className="h-full w-full bg-black"
        onPlay={() => {
         setError(null);
         setBuffering(false);
