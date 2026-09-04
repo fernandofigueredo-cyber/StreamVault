@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { cn, formatTime } from "@/lib/utils";
 import { useParentalStore } from "@/stores/parentalStore";
+import { useCurrentProfile } from "@/stores/currentProfileStore";
 import { isAdultContent } from "@/lib/parental";
 import { PinGate } from "./parental/PinGate";
 
