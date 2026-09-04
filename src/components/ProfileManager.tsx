@@ -15,6 +15,32 @@ export default function ProfileManager({ initialProfiles }: { initialProfiles: P
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+    
+  const parental = useParentalStore();
+
+  const [pendingProfileData, setPendingProfileData] = useState<null | { name: string; avatar: string; pin?: string; isKids: boolean; editingId: number | null }>(null);
+  const [pinAuth, setPinAuth] = useState('');
+  const [pinAuthError, setPinAuthError] = useState('');
+
+  async function handlePinAuth() {
+    if (!pendingProfileData) return;
+    if (pinAuth.length !== 4) { setPinAuthError('Digite o PIN de 4 dígitos'); return; }
+    const h = await hashPin(pinAuth);
+    if (h !== parental.pinHash) {
+      setPinAuthError('PIN incorreto');
+      setPinAuth('');
+      return;
+    }
+    const data = pendingProfileData;
+    setPendingProfileData(null);
+    setPinAuth('');
+    setPinAuthError('');
+    if (data.editingId !== null) {
+      void update(data.editingId, { name: data.name, avatar: data.avatar, pin: data.pin, isKids: data.isKids });
+    } else {
+      void create({ name: data.name, avatar: data.avatar, pin: data.pin ?? '', isKids: data.isKids });
+    }
+  }
 
   async function create(data: { name: string; avatar: string; pin: string; isKids: boolean }) {
     const r = await fetch("/api/profiles", {
