@@ -187,6 +187,47 @@ export default function ProfileManager({ initialProfiles }: { initialProfiles: P
     onClose={() => { setCreating(false); setEditing(null); }}
   />
 )}
+      
+      {/* Modal: PIN parental para autorizar criação/edição de perfil */}
+      {pendingProfileData && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-[#1a1a1a] border border-zinc-800 p-6 text-white space-y-3">
+            <h3 className="text-lg font-bold">🔒 Autorização necessária</h3>
+            <p className="text-sm text-zinc-400">
+              Digite o PIN do Controle Parental para {pendingProfileData.editingId !== null ? 'atualizar' : 'criar'} o perfil <b>{pendingProfileData.name}</b>.
+            </p>
+            <input
+              type="password"
+              inputMode="numeric"
+              autoFocus
+              maxLength={4}
+              value={pinAuth}
+              onChange={(e) => setPinAuth(e.target.value.replace(/\D/g, ''))}
+              onKeyDown={(e) => { if (e.key === 'Enter' && pinAuth.length === 4) void handlePinAuth(); }}
+              placeholder="****"
+              className="w-full text-center text-3xl tracking-[0.6em] bg-zinc-900 border border-zinc-700 rounded-xl py-3 outline-none focus:border-brand-500"
+            />
+            {pinAuthError && <p className="text-sm text-red-500">{pinAuthError}</p>}
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => { setPendingProfileData(null); setPinAuth(''); setPinAuthError(''); }}
+                className="flex-1 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void handlePinAuth()}
+                disabled={pinAuth.length !== 4}
+                className="flex-1 py-3 rounded-xl bg-brand-500 font-bold text-white disabled:opacity-50 hover:bg-brand-600"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
