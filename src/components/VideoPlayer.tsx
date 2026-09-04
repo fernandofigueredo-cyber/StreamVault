@@ -441,7 +441,11 @@ export default function VideoPlayer({ source }: { source: PlayerSource }) {
             <Lock className="h-4 w-4" /> Desbloquear
           </button>
         </div>
-        {showPin ? <PinGate onClose={() => setShowPin(false)} /> : null}
+        <PinGate
+  open={showPin}
+  onOpenChange={setShowPin}
+  onSuccess={() => setShowPin(false)}
+/>
       </div>
     );
   }
