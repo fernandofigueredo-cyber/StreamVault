@@ -504,11 +504,11 @@ void tick;
       )}
     >
       <video
-        ref={videoRef}
-        playsInline
-        autoPlay
-        className="h-full w-full bg-black"
-        onPlay={() => {
+       ref={videoRef}
+       playsInline
+       preload="auto"
+       className="h-full w-full bg-black"
+       onPlay={() => {
           setPlaying(true);
           bumpControls();
         }}
