@@ -200,23 +200,32 @@ export default function VideoPlayer({ source }: { source: PlayerSource }) {
         hls.attachMedia(video);
 
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          if (disposed) return;
-          setLevels(
-            hls.levels.map((level, index) => ({
-              index,
-              height: level.height ?? 0,
-              bitrate: level.bitrate ?? 0,
-            })),
-          );
-          setReady(true);
-          setBuffering(false);
-          void video.play().catch(() => {
-            // Autoplay bloqueado pelo browser não significa canal offline.
-            setPlaying(false);
-            setReady(true);
-            setBuffering(false);
-          });
-        });
+  setLevels(
+    hls.levels.map((level, index) => ({
+      index,
+      height: level.height ?? 0,
+      bitrate: level.bitrate ?? 0,
+    })),
+  );
+
+  setReady(true);
+  setBuffering(false);
+
+  void video.play().catch(async () => {
+    // Chrome bloqueia autoplay com som. Tenta de novo em mudo.
+    try {
+      video.muted = true;
+      setMuted(true);
+      await video.play();
+      console.info("[player] autoplay iniciado em mudo");
+    } catch (e) {
+      console.error("[player] autoplay negado mesmo em mudo:", e, video.error);
+      setPlaying(false);
+      setReady(true);
+      setBuffering(false);
+    }
+  });
+});
 
         hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) =>
           setActiveLevel(hls.autoLevelEnabled ? -1 : data.level),
