@@ -125,8 +125,43 @@ export default function VideoPlayer({ source }: { source: PlayerSource }) {
   }, []);
 
   // Attach the stream (HLS via hls.js, native otherwise).
+ Esse erro é **muito específico** e resolve o mistério:
+
+> `NotSupportedError: The element has no supported sources`
+
+Significa: **o `<video>` está completamente vazio.** Sem `src`, sem MediaSource anexado. Você aperta play num elemento que não tem nada dentro.
+
+Ou seja: **o `useEffect` que anexa o stream nunca executou** (ou abortou logo no início).
+
+---
+
+## 🔍 Primeiro: você aplicou o arquivo completo que eu enviei?
+
+O erro em pares (`Falha real do video.play()` + `MediaError:`) é do `togglePlay` **antigo**. Isso sugere que você aplicou só as edições pontuais, **mas não** a correção principal.
+
+**Confirme com Ctrl+F no `VideoPlayer.tsx`:**
+
+Procure por:
+```
+}, [source.url, isHls, attempt, source.isLive, blocked]);
+```
+
+- **Achou?** → ✅ aplicado, pule para o Passo 2
+- **Só tem `}, [source.url, isHls, attempt, source.isLive]);`** → ❌ **é essa a causa**. Adicione `, blocked` no final dessa linha.
+
+---
+
+## 🔧 Passo 1 — Substitua o efeito inteiro
+
+Procure por `// Attach the stream` e substitua **todo o `useEffect`** (do `useEffect(() => {` até o `}, [...]);` final) por este:
+
+```ts
+  // Attach the stream (HLS via hls.js, native otherwise).
   useEffect(() => {
+    console.log("[player] effect", { blocked, isHls, url: source.url });
+
     if (blocked) {
+      console.log("[player] bloqueado pelo parental — nao anexa");
       hlsRef.current?.destroy();
       hlsRef.current = null;
       setReady(false);
@@ -139,43 +174,36 @@ export default function VideoPlayer({ source }: { source: PlayerSource }) {
 
     function attach(video: HTMLVideoElement) {
       if (disposed) return;
-
       setReady(false);
       setBuffering(true);
       setError(null);
 
-      if (isHls && !video.canPlayType("application/vnd.apple.mpegurl")) {
+      const nativeHls = video.canPlayType("application/vnd.apple.mpegurl") !== "";
+      console.log("[player] attach", { isHls, nativeHls, hlsSupported: Hls.isSupported() });
+
+      if (isHls && !nativeHls) {
         if (!Hls.isSupported()) {
-          setError("HLS is not supported in this browser.");
+          setError("HLS nao e suportado neste navegador.");
           setBuffering(false);
           return;
         }
 
         const isLiveStream = source.isLive;
         const hls = new Hls({
-          // ── Core ──────────────────────────────────────────────────────
           enableWorker: true,
           lowLatencyMode: false,
-
-          // ── Buffer — live TV needs a bigger runway to avoid stalls ───
           maxBufferLength: isLiveStream ? 60 : 30,
           maxMaxBufferLength: isLiveStream ? 120 : 60,
           maxBufferSize: 60 * 1000 * 1000,
           backBufferLength: isLiveStream ? 0 : 30,
           maxBufferHole: 0.5,
-
-          // ── Live sync ────────────────────────────────────────────────
           liveSyncDurationCount: 3,
           liveMaxLatencyDurationCount: 10,
           liveDurationInfinity: true,
-
-          // ── Stall recovery ───────────────────────────────────────────
           nudgeMaxRetry: 10,
           nudgeOffset: 0.2,
           maxStarvationDelay: 4,
           maxLoadingDelay: 4,
-
-          // ── Network timeouts & retries ───────────────────────────────
           manifestLoadingTimeOut: 20000,
           manifestLoadingMaxRetry: 4,
           manifestLoadingRetryDelay: 1000,
@@ -184,104 +212,89 @@ export default function VideoPlayer({ source }: { source: PlayerSource }) {
           fragLoadingTimeOut: 20000,
           fragLoadingMaxRetry: 6,
           fragLoadingRetryDelay: 500,
-
-          // ── ABR ──────────────────────────────────────────────────────
           startLevel: -1,
           abrEwmaDefaultEstimate: 500000,
-
-          // Mantém cookies/sessão nos segmentos quando há proxy assinado.
-          xhrSetup: (xhr) => {
-            xhr.withCredentials = false;
-          },
         });
 
         hlsRef.current = hls;
         hls.loadSource(source.url);
         hls.attachMedia(video);
+        console.log("[player] hls.attachMedia OK");
 
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
-  setLevels(
-    hls.levels.map((level, index) => ({
-      index,
-      height: level.height ?? 0,
-      bitrate: level.bitrate ?? 0,
-    })),
-  );
+          if (disposed) return;
+          console.log("[player] MANIFEST_PARSED", hls.levels.length, "niveis");
+          setLevels(
+            hls.levels.map((level, index) => ({
+              index,
+              height: level.height ?? 0,
+              bitrate: level.bitrate ?? 0,
+            })),
+          );
+          setReady(true);
+          setBuffering(false);
 
-  setReady(true);
-  setBuffering(false);
-
-  void video.play().catch(async () => {
-    // Chrome bloqueia autoplay com som. Tenta de novo em mudo.
-    try {
-      video.muted = true;
-      setMuted(true);
-      await video.play();
-      console.info("[player] autoplay iniciado em mudo");
-    } catch (e) {
-      console.error("[player] autoplay negado mesmo em mudo:", e, video.error);
-      setPlaying(false);
-      setReady(true);
-      setBuffering(false);
-    }
-  });
-});
+          void video.play().catch(async () => {
+            try {
+              video.muted = true;
+              setMuted(true);
+              await video.play();
+              console.info("[player] autoplay iniciado em mudo");
+            } catch (e) {
+              console.error("[player] autoplay negado mesmo em mudo:", e, video.error);
+              setPlaying(false);
+              setReady(true);
+              setBuffering(false);
+            }
+          });
+        });
 
         hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) =>
           setActiveLevel(hls.autoLevelEnabled ? -1 : data.level),
         );
 
         let mediaErrorCount = 0;
+        let netRetries = 0;
         hls.on(Hls.Events.ERROR, (_event, data) => {
           if (disposed) return;
+          console.warn("[hls]", data.type, data.details, "fatal:", data.fatal, data.response?.code);
 
           if (!data.fatal) {
-            if (data.type === "networkError" || data.type === "mediaError") {
-              setBuffering(true);
-            }
+            if (data.type === "networkError" || data.type === "mediaError") setBuffering(true);
             return;
           }
-
-          if (data.type === "mediaError") {
-            mediaErrorCount += 1;
-            if (mediaErrorCount <= 3) {
-              hls.recoverMediaError();
-              return;
-            }
+          if (data.type === "mediaError" && mediaErrorCount++ < 3) {
+            hls.recoverMediaError();
+            return;
           }
-
-          if (data.type === "networkError" && isLiveStream) {
+          if (data.type === "networkError" && isLiveStream && netRetries < 3) {
+            netRetries += 1;
             hls.stopLoad();
-            window.setTimeout(() => {
-              if (!disposed) hls.startLoad();
-            }, 3000);
+            window.setTimeout(() => { if (!disposed) hls.startLoad(); }, 3000);
             return;
           }
-
           setError(
             data.type === "networkError"
-              ? "O stream não está acessível. A fonte pode estar offline ou a bloquear esta rede."
-              : "A reprodução falhou. Tente outro canal ou recarregue.",
+              ? `Falha de rede (${data.details}${data.response?.code ? ` - HTTP ${data.response.code}` : ""}).`
+              : `Falha na reproducao (${data.details}).`,
           );
           setBuffering(false);
         });
-
         return;
       }
 
-      // Caminho nativo (mp4/mkv, ou HLS no Safari).
+      console.log("[player] caminho nativo, src =", source.url);
       video.src = source.url;
       video.load();
       setReady(true);
       setBuffering(false);
     }
 
-    // FIX: quando saímos do estado `blocked`, o <video> ainda não existe
-    // no mesmo tick. Espera o próximo frame até o ref montar.
     const start = () => {
       if (disposed) return;
       const video = videoRef.current;
       if (!video) {
+        console.log("[player] videoRef ainda null, aguardando frame...");
         raf = window.requestAnimationFrame(start);
         return;
       }
@@ -300,9 +313,67 @@ export default function VideoPlayer({ source }: { source: PlayerSource }) {
         video.load();
       }
     };
-    // FIX PRINCIPAL: `blocked` precisa estar aqui, senão o stream nunca
-    // é anexado depois que o bloqueio some (hidratação ou PIN correto).
   }, [source.url, isHls, attempt, source.isLive, blocked]);
+```
+
+---
+
+## 🔧 Passo 2 — Proteja o `togglePlay`
+
+Procure por `const togglePlay = useCallback` e substitua a função inteira:
+
+```ts
+  const togglePlay = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    // Nao adianta chamar play() num elemento sem fonte.
+    if (!video.currentSrc && !video.src && video.readyState === 0) {
+      console.warn("[player] sem fonte anexada — forcando novo attach");
+      setAttempt((prev) => prev + 1);
+      return;
+    }
+
+    if (!video.paused) {
+      video.pause();
+      return;
+    }
+
+    setError(null);
+    setBuffering(true);
+
+    try {
+      await video.play();
+    } catch (playError) {
+      console.error("[player] play() falhou:", playError, video.error);
+      setPlaying(false);
+      setBuffering(false);
+      setReady(true);
+    }
+  }, []);
+```
+
+---
+
+## ▶️ Teste e me mande o Console
+
+```bash
+npm run dev
+```
+
+Abra o canal, F12 → Console. Agora vai aparecer o rastro completo:
+
+| Log que aparece | Diagnóstico |
+|---|---|
+| `[player] bloqueado pelo parental` | O parental ainda barra → mande `src/lib/parental.ts` |
+| `[player] effect` nunca aparece | O componente não monta → problema na página |
+| `[player] attach { isHls: false ... }` | 🎯 `forceHls` não chegou — problema no `PlayerSource` |
+| `[player] hls.attachMedia OK` + nada depois | Manifesto não carrega → veja a aba Network |
+| `[player] MANIFEST_PARSED 0 niveis` | Manifesto vazio/inválido do painel |
+| `[hls] networkError ... HTTP 403` | Proxy ou painel rejeitando |
+| `[player] autoplay iniciado em mudo` | ✅ **Funcionou** — só clique no som |
+
+**Copie e cole aqui as linhas que começam com `[player]` e `[hls]`.** Com elas eu identifico o ponto exato em uma mensagem. 👊
 
   // Resume position for on-demand content.
   useEffect(() => {
