@@ -1,49 +1,29 @@
-# syntax=docker/dockerfile:1
-
-########## deps ##########
-FROM node:22-alpine AS deps
+FROM node:20-alpine AS deps
 WORKDIR /app
-RUN apk add --no-cache libc6-compat
-COPY package.json ./
-RUN npm install
+COPY package*.json ./
+RUN npm ci
 
-########## build ##########
-FROM node:22-alpine AS builder
+FROM node:20-alpine AS builder
 WORKDIR /app
-ENV NEXT_TELEMETRY_DISABLED=1 \
-    DOCKER_BUILD=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN mkdir -p public
-ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/streamvault"
-ENV SESSION_SECRET="chave_temporaria_apenas_para_compilacao_12345"
-
-RUN npm run build
-
-
-########## runtime ##########
-FROM node:22-alpine AS runner
-WORKDIR /app
-ENV NODE_ENV=production \
+RUN SESSION_SECRET=build-only \
+    DATABASE_URL=postgres://build:build@localhost:5432/build \
     NEXT_TELEMETRY_DISABLED=1 \
-    PORT=3000 \
-    HOSTNAME=0.0.0.0
+    npm run build
 
-RUN apk add --no-cache wget && \
-    addgroup -g 1001 -S nodejs && \
-    adduser -S nextjs -u 1001
-
+FROM node:20-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-USER nextjs
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/next.config.ts ./next.config.ts
+COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
+COPY --from=builder /app/src/db ./src/db
+COPY entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
 EXPOSE 3000
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=25s --retries=5 \
-  CMD wget -q -O /dev/null http://127.0.0.1:3000/api/health || exit 1
-
-USER root
-RUN echo "console.log('Migração pronta');" > /app/migrate.js
-
-CMD ["node", "server.js"]
+ENTRYPOINT ["./entrypoint.sh"]
