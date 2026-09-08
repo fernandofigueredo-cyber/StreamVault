@@ -413,10 +413,9 @@ export default function VideoPlayer({ source }: { source: PlayerSource }) {
     setError(null);
     setBuffering(true);
 
-    try {
-      hlsRef.current?.startLoad(-1);
-      await video.play();
-    } catch (playError) {
+      try {
+    await video.play();
+  } catch (playError) {
       console.error("Falha real do video.play():", playError, video.error);
       setPlaying(false);
       setBuffering(false);
