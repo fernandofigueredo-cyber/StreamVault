@@ -94,7 +94,19 @@ export async function GET(request: Request, context: Context) {
   if (!item) return Response.json({ error: "Item not found." }, { status: 404 });
 
   // No token means "play this item" — start from its own stored stream URL.
-  const target = readUrl(searchParams.get("u")) ?? item.streamUrl;
+    const signedToken = searchParams.get("u");
+  let target: string;
+
+  if (signedToken) {
+    const verified = readUrl(signedToken);
+    if (!verified) {
+      console.error("[stream] assinatura invalida — SESSION_SECRET mudou?");
+      return Response.json({ error: "Invalid stream token." }, { status: 403 });
+    }
+    target = verified;
+  } else {
+    target = item.streamUrl;
+  }
 
   const range = request.headers.get("range");
 
