@@ -33,7 +33,6 @@ export type PlayerSource = {
   url: string;
   isLive: boolean;
   resumeAt?: number | null;
-  /** Force the HLS pipeline when playback goes through the signed proxy. */
   forceHls?: boolean;
 };
 
@@ -64,20 +63,17 @@ export default function VideoPlayer({ source }: { source: PlayerSource }) {
   const [controlsVisible, setControlsVisible] = useState(true);
   const [attempt, setAttempt] = useState(0);
 
-  /* ------------------------------------------------------------------ parental */
+  /* ---------------------------------------------------------------- parental */
 
   const parental = useParentalStore();
   const currentProfile = useCurrentProfile();
   const { profile, isParentalDisabledForCurrent } = currentProfile;
 
-  // `hydrated` só existe na versão nova do store. Se ainda não migrou,
-  // `undefined !== false` → true → comportamento antigo preservado.
   const hydrated = (currentProfile as { hydrated?: boolean }).hydrated !== false;
 
   const [showPin, setShowPin] = useState(false);
   const [tick, setTick] = useState(0);
 
-  // FIX: nunca deixe o parental decidir sem metadados (fail-open).
   const isAdult = useMemo(() => {
     if (!source.title && !source.subtitle) return false;
     try {
@@ -91,14 +87,10 @@ export default function VideoPlayer({ source }: { source: PlayerSource }) {
     }
   }, [source.title, source.subtitle]);
 
-  // FIX: se `unlockedUntil` for null/undefined, considera desbloqueado
-  // (antes isso travava o PIN para sempre).
   const isUnlocked =
     parental.isUnlocked === true &&
     (parental.unlockedUntil == null || Date.now() < parental.unlockedUntil);
 
-  // FIX: `hydrated &&` evita o falso bloqueio no primeiro render,
-  // quando `profile` ainda é null e o efeito de attach abortava.
   const blocked =
     hydrated &&
     isAdult &&
@@ -107,7 +99,6 @@ export default function VideoPlayer({ source }: { source: PlayerSource }) {
       (!!profile && !profile.isKids && parental.enabled && !isParentalDisabledForCurrent) ||
       (!profile && parental.enabled));
 
-  // Re-render a cada segundo para aplicar o auto-lock por tempo.
   useEffect(() => {
     if (!parental.isUnlocked) return;
     const id = window.setInterval(() => setTick((t) => t + 1), 1000);
@@ -115,7 +106,7 @@ export default function VideoPlayer({ source }: { source: PlayerSource }) {
   }, [parental.isUnlocked, parental.unlockedUntil]);
   void tick;
 
-  /* -------------------------------------------------------------------- setup */
+  /* ------------------------------------------------------------------ setup */
 
   const isHls = source.forceHls === true || /\.m3u8(\?|$)/i.test(source.url);
 
@@ -124,38 +115,6 @@ export default function VideoPlayer({ source }: { source: PlayerSource }) {
     setMuted(window.localStorage.getItem(MUTED_KEY) === "1");
   }, []);
 
-  // Attach the stream (HLS via hls.js, native otherwise).
- Esse erro é **muito específico** e resolve o mistério:
-
-> `NotSupportedError: The element has no supported sources`
-
-Significa: **o `<video>` está completamente vazio.** Sem `src`, sem MediaSource anexado. Você aperta play num elemento que não tem nada dentro.
-
-Ou seja: **o `useEffect` que anexa o stream nunca executou** (ou abortou logo no início).
-
----
-
-## 🔍 Primeiro: você aplicou o arquivo completo que eu enviei?
-
-O erro em pares (`Falha real do video.play()` + `MediaError:`) é do `togglePlay` **antigo**. Isso sugere que você aplicou só as edições pontuais, **mas não** a correção principal.
-
-**Confirme com Ctrl+F no `VideoPlayer.tsx`:**
-
-Procure por:
-```
-}, [source.url, isHls, attempt, source.isLive, blocked]);
-```
-
-- **Achou?** → ✅ aplicado, pule para o Passo 2
-- **Só tem `}, [source.url, isHls, attempt, source.isLive]);`** → ❌ **é essa a causa**. Adicione `, blocked` no final dessa linha.
-
----
-
-## 🔧 Passo 1 — Substitua o efeito inteiro
-
-Procure por `// Attach the stream` e substitua **todo o `useEffect`** (do `useEffect(() => {` até o `}, [...]);` final) por este:
-
-```ts
   // Attach the stream (HLS via hls.js, native otherwise).
   useEffect(() => {
     console.log("[player] effect", { blocked, isHls, url: source.url });
@@ -270,7 +229,9 @@ Procure por `// Attach the stream` e substitua **todo o `useEffect`** (do `useEf
           if (data.type === "networkError" && isLiveStream && netRetries < 3) {
             netRetries += 1;
             hls.stopLoad();
-            window.setTimeout(() => { if (!disposed) hls.startLoad(); }, 3000);
+            window.setTimeout(() => {
+              if (!disposed) hls.startLoad();
+            }, 3000);
             return;
           }
           setError(
@@ -314,66 +275,6 @@ Procure por `// Attach the stream` e substitua **todo o `useEffect`** (do `useEf
       }
     };
   }, [source.url, isHls, attempt, source.isLive, blocked]);
-```
-
----
-
-## 🔧 Passo 2 — Proteja o `togglePlay`
-
-Procure por `const togglePlay = useCallback` e substitua a função inteira:
-
-```ts
-  const togglePlay = useCallback(async () => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    // Nao adianta chamar play() num elemento sem fonte.
-    if (!video.currentSrc && !video.src && video.readyState === 0) {
-      console.warn("[player] sem fonte anexada — forcando novo attach");
-      setAttempt((prev) => prev + 1);
-      return;
-    }
-
-    if (!video.paused) {
-      video.pause();
-      return;
-    }
-
-    setError(null);
-    setBuffering(true);
-
-    try {
-      await video.play();
-    } catch (playError) {
-      console.error("[player] play() falhou:", playError, video.error);
-      setPlaying(false);
-      setBuffering(false);
-      setReady(true);
-    }
-  }, []);
-```
-
----
-
-## ▶️ Teste e me mande o Console
-
-```bash
-npm run dev
-```
-
-Abra o canal, F12 → Console. Agora vai aparecer o rastro completo:
-
-| Log que aparece | Diagnóstico |
-|---|---|
-| `[player] bloqueado pelo parental` | O parental ainda barra → mande `src/lib/parental.ts` |
-| `[player] effect` nunca aparece | O componente não monta → problema na página |
-| `[player] attach { isHls: false ... }` | 🎯 `forceHls` não chegou — problema no `PlayerSource` |
-| `[player] hls.attachMedia OK` + nada depois | Manifesto não carrega → veja a aba Network |
-| `[player] MANIFEST_PARSED 0 niveis` | Manifesto vazio/inválido do painel |
-| `[hls] networkError ... HTTP 403` | Proxy ou painel rejeitando |
-| `[player] autoplay iniciado em mudo` | ✅ **Funcionou** — só clique no som |
-
-**Copie e cole aqui as linhas que começam com `[player]` e `[hls]`.** Com elas eu identifico o ponto exato em uma mensagem. 👊
 
   // Resume position for on-demand content.
   useEffect(() => {
@@ -438,7 +339,7 @@ Abra o canal, F12 → Console. Agora vai aparecer o rastro completo:
     video.muted = muted;
   }, [volume, muted, blocked]);
 
-  /* ----------------------------------------------------------------- controls */
+  /* --------------------------------------------------------------- controls */
 
   const persist = useCallback(
     (position: number, total: number) => {
@@ -476,6 +377,12 @@ Abra o canal, F12 → Console. Agora vai aparecer o rastro completo:
     const video = videoRef.current;
     if (!video) return;
 
+    if (!video.currentSrc && !video.src && video.readyState === 0) {
+      console.warn("[player] sem fonte anexada — forcando novo attach");
+      setAttempt((prev) => prev + 1);
+      return;
+    }
+
     if (!video.paused) {
       video.pause();
       return;
@@ -484,10 +391,10 @@ Abra o canal, F12 → Console. Agora vai aparecer o rastro completo:
     setError(null);
     setBuffering(true);
 
-      try {
-    await video.play();
-  } catch (playError) {
-      console.error("Falha real do video.play():", playError, video.error);
+    try {
+      await video.play();
+    } catch (playError) {
+      console.error("[player] play() falhou:", playError, video.error);
       setPlaying(false);
       setBuffering(false);
       setReady(true);
@@ -563,7 +470,7 @@ Abra o canal, F12 → Console. Agora vai aparecer o rastro completo:
   const progressPercent = live ? 100 : Math.min(100, (current / Math.max(duration, 1)) * 100);
   const bufferedPercent = live ? 100 : Math.min(100, (buffered / Math.max(duration, 1)) * 100);
 
-  /* ------------------------------------------------------------------- render */
+  /* ----------------------------------------------------------------- render */
 
   if (blocked) {
     return (
@@ -587,7 +494,6 @@ Abra o canal, F12 → Console. Agora vai aparecer o rastro completo:
           onOpenChange={setShowPin}
           onSuccess={() => {
             setShowPin(false);
-            // Garante nova tentativa de attach mesmo se o store demorar.
             setAttempt((prev) => prev + 1);
           }}
         />
@@ -633,8 +539,10 @@ Abra o canal, F12 → Console. Agora vai aparecer o rastro completo:
         }}
         onDurationChange={(event) => setDuration(event.currentTarget.duration)}
         onEnded={() => setPlaying(false)}
-        onError={() => {
-          if (!isHls) setError("This stream could not be played in your browser.");
+        onError={(event) => {
+          const v = event.currentTarget;
+          console.error("[video] error", v.error?.code, v.error?.message, "src:", v.currentSrc);
+          if (!isHls) setError("Este stream nao pode ser reproduzido no navegador.");
           setBuffering(false);
         }}
         onClick={togglePlay}
